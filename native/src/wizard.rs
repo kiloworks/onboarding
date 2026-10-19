@@ -1,7 +1,7 @@
 use crate::{
     core::{self, Event, Machine},
     input::TextInput,
-    windows,
+    updater, windows,
 };
 use gpui::{div, prelude::*, px, rgb, *};
 use std::{
@@ -20,7 +20,10 @@ actions!(
         CopyReport,
         Refresh,
         TabNext,
-        TabPrevious
+        TabPrevious,
+        InstallUpdate,
+        DismissUpdate,
+        ReleaseNotes
     ]
 );
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -41,6 +44,8 @@ enum Update {
     Inspected(Result<Machine, String>),
     Progress(Event),
     Finished(Result<(), String>),
+    Checked(Result<Option<updater::Release>, String>),
+    Prepared(Result<(), String>),
 }
 pub struct Wizard {
     machine: Option<Machine>,
@@ -54,6 +59,9 @@ pub struct Wizard {
     sender: mpsc::Sender<Update>,
     started: Instant,
     motion: bool,
+    release: Option<updater::Release>,
+    update_message: String,
+    update_busy: bool,
 }
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
@@ -84,8 +92,15 @@ impl Wizard {
             sender,
             started: Instant::now(),
             motion: true,
+            release: None,
+            update_message: String::new(),
+            update_busy: false,
         };
         this.inspect(cx);
+        let sender = this.sender.clone();
+        std::thread::spawn(move || {
+            let _ = sender.send(Update::Checked(updater::check().map_err(|e| e.to_string())));
+        });
         cx.spawn(async move |entity, cx| {
             loop {
                 cx.background_executor()
@@ -93,7 +108,7 @@ impl Wizard {
                     .await;
                 if entity
                     .update(cx, |this, cx| {
-                        let changed = this.poll();
+                        let changed = this.poll(cx);
                         if changed || this.phase == Phase::Working {
                             cx.notify();
                         }
@@ -118,11 +133,25 @@ impl Wizard {
             let _ = sender.send(Update::Inspected(result));
         });
     }
-    fn poll(&mut self) -> bool {
+    fn poll(&mut self, cx: &mut Context<Self>) -> bool {
         let mut changed = false;
         while let Ok(update) = self.updates.try_recv() {
             changed = true;
             match update {
+                Update::Checked(result) => match result {
+                    Ok(release) => self.release = release,
+                    Err(e) => {
+                        self.update_message = format!(
+                            "업데이트 확인 실패: {e} 현재 버전으로 계속 사용할 수 있습니다."
+                        )
+                    }
+                },
+                Update::Prepared(Ok(())) => cx.quit(),
+                Update::Prepared(Err(e)) => {
+                    self.update_busy = false;
+                    self.update_message =
+                        format!("업데이트 실패: {e} 현재 버전으로 계속 사용할 수 있습니다.");
+                }
                 Update::Inspected(Ok(machine)) => {
                     self.machine = Some(machine);
                     if self.phase != Phase::Done {
@@ -154,7 +183,7 @@ impl Wizard {
         changed
     }
     fn advance(&mut self, _: &Advance, window: &mut Window, cx: &mut Context<Self>) {
-        if self.phase != Phase::Ready {
+        if self.update_busy || self.phase != Phase::Ready {
             return;
         }
         match self.page {
@@ -201,7 +230,7 @@ impl Wizard {
         cx.notify();
     }
     fn back(&mut self, _: &Back, window: &mut Window, cx: &mut Context<Self>) {
-        if self.phase == Phase::Ready {
+        if !self.update_busy && self.phase == Phase::Ready {
             self.page = match self.page {
                 Page::Review => Page::Key,
                 _ => Page::Intro,
@@ -211,7 +240,9 @@ impl Wizard {
         }
     }
     fn restart(&mut self, _: &Restart, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error) && self.machine.is_some()
+        if !self.update_busy
+            && matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
+            && self.machine.is_some()
         {
             self.phase = Phase::Ready;
             self.page = Page::Key;
@@ -251,11 +282,45 @@ impl Wizard {
         cx.notify();
     }
     fn refresh(&mut self, _: &Refresh, _: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
+        if !self.update_busy
+            && matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
             && self.page == Page::Intro
         {
             self.inspect(cx);
             cx.notify();
+        }
+    }
+    fn install_update(&mut self, _: &InstallUpdate, _: &mut Window, cx: &mut Context<Self>) {
+        if self.update_busy || self.phase == Phase::Working || self.page != Page::Intro {
+            return;
+        }
+        let Some(release) = self.release.clone() else {
+            return;
+        };
+        self.update_busy = true;
+        self.update_message =
+            "업데이트 다운로드·서명 검증 중입니다. 완료되면 앱이 종료되고 설치 후 다시 실행됩니다."
+                .into();
+        let sender = self.sender.clone();
+        std::thread::spawn(move || {
+            let _ = sender.send(Update::Prepared(
+                updater::prepare(&release).map_err(|e| e.to_string()),
+            ));
+        });
+        cx.notify();
+    }
+    fn dismiss_update(&mut self, _: &DismissUpdate, _: &mut Window, cx: &mut Context<Self>) {
+        if !self.update_busy {
+            self.release = None;
+            cx.notify();
+        }
+    }
+    fn release_notes(&mut self, _: &ReleaseNotes, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(release) = &self.release {
+            cx.open_url(&format!(
+                "https://github.com/kiloworks/onboarding/releases/tag/{}",
+                release.tag
+            ));
         }
     }
     fn button(
@@ -314,6 +379,9 @@ impl Render for Wizard {
             },
         };
         let mut body = div()
+            .id("wizard-body")
+            .min_h_0()
+            .overflow_y_scroll()
             .flex()
             .flex_col()
             .gap_3()
@@ -343,7 +411,7 @@ impl Render for Wizard {
                     }))
                     .child(self.message.clone()),
             );
-        if self.phase == Phase::Ready {
+        if !self.update_busy && self.phase == Phase::Ready {
             let machine = self.machine.as_ref().unwrap();
             match self.page {
                 Page::Intro => {
@@ -473,7 +541,8 @@ impl Render for Wizard {
                     cx,
                 ));
         }
-        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
+        if !self.update_busy
+            && matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
             && self.page == Page::Intro
         {
             if let Some(machine) = &self.machine {
@@ -521,6 +590,54 @@ impl Render for Wizard {
                 );
         }
 
+        if self.page == Page::Intro && self.phase != Phase::Working {
+            if !self.update_message.is_empty() {
+                body = body.child(
+                    div()
+                        .id("app-update-status")
+                        .role(Role::Status)
+                        .aria_label(self.update_message.clone())
+                        .child(self.update_message.clone()),
+                );
+            }
+            if !self.update_busy {
+                if let Some(release) = &self.release {
+                    body = body.child(
+                        panel()
+                            .child(format!(
+                                "새 버전 v{}을 사용할 수 있습니다.",
+                                release.version
+                            ))
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_3()
+                                    .child(self.button(
+                                        "install-update",
+                                        "업데이트",
+                                        InstallUpdate,
+                                        false,
+                                        cx,
+                                    ))
+                                    .child(self.button(
+                                        "dismiss-update",
+                                        "나중에",
+                                        DismissUpdate,
+                                        true,
+                                        cx,
+                                    ))
+                                    .child(self.button(
+                                        "release-notes",
+                                        "릴리스 설명",
+                                        ReleaseNotes,
+                                        true,
+                                        cx,
+                                    )),
+                            ),
+                    );
+                }
+            }
+        }
         div()
             .id("wizard")
             .role(Role::Application)
@@ -542,6 +659,9 @@ impl Render for Wizard {
             .on_action(cx.listener(Self::toggle_motion))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::refresh))
+            .on_action(cx.listener(Self::install_update))
+            .on_action(cx.listener(Self::dismiss_update))
+            .on_action(cx.listener(Self::release_notes))
             .size_full()
             .bg(rgb(0xf6f8fb))
             .text_color(rgb(0x17212f))

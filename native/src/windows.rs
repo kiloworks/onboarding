@@ -28,7 +28,7 @@ fn encode(script: &str) -> String {
             .collect::<Vec<_>>(),
     )
 }
-fn ps(script: &str) -> Command {
+pub(crate) fn ps(script: &str) -> Command {
     let mut cmd = Command::new(powershell());
     cmd.args([
         "-NoProfile",

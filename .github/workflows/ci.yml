@@ -110,6 +110,10 @@ jobs:
           name: native-${{ matrix.arch }}
           path: candidate
       - run: ./scripts/check-windows.ps1
+      - run: ./scripts/check-updates.ps1
+      - name: Verify updater on Windows PowerShell 5.1
+        shell: powershell
+        run: ./scripts/check-updates.ps1
       - run: ./scripts/prepare-desktop.ps1
       - name: Install, upgrade and exercise native wizard
         shell: pwsh
@@ -130,6 +134,7 @@ jobs:
           if (!(Test-Path "$install\user-data.txt") -or !(Test-Path "$install\licenses\LICENSE-INDEX.json")) { throw 'Upgrade lost user data or license index' }
           $env:ONBOARDING_EXE = "$install\onboarding.exe"
           ./scripts/drive-ui.ps1
+          ./scripts/check-updates.ps1 -Installer $installer.FullName -InstallDir $install -Arch ${{ matrix.arch }}
           Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -147,11 +152,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: onboarding-*
           path: artifacts
-      - name: Publish native preview installers
+      - name: Collect tested installers
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -159,6 +167,16 @@ jobs:
           mkdir release
           find artifacts/onboarding-windows-2025 -name '*-setup.exe*' -exec cp {} release/ \;
           find artifacts/onboarding-windows-11-arm -name '*-setup.exe*' -exec cp {} release/ \;
+      - name: Sign update manifests
+        shell: pwsh
+        env:
+          ONBOARDING_UPDATE_PRIVATE_KEY: ${{ secrets.ONBOARDING_UPDATE_PRIVATE_KEY }}
+        run: ./scripts/sign-updates.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           cat > notes.txt <<NOTES
@@ -169,7 +187,8 @@ jobs:
           | x64 | [setup.exe]($base/onboarding-$version-windows-x64-setup.exe) | [.sha256]($base/onboarding-$version-windows-x64-setup.exe.sha256) |
           | ARM64 | [setup.exe]($base/onboarding-$version-windows-arm64-setup.exe) | [.sha256]($base/onboarding-$version-windows-arm64-setup.exe.sha256) |
 
-          기존 Tailscale 상태·저장 계정·캐시를 삭제하고 입력한 새 authkey로 등록합니다. 완료한 호스트도 강제로 다시 시작할 수 있습니다.
+          앱 실행 시 프리릴리스를 포함한 새 버전을 확인합니다. 승인하면 전자서명과 해시를 검증하고 앱을 업데이트한 뒤 다시 실행합니다. 기존 자동 업데이트 미지원 버전에서는 이번 버전을 수동 설치해야 합니다.
+          앱 업데이트는 Tailscale·SSH 설정을 유지합니다. 별도의 온보딩 재시작을 승인하면 기존 Tailscale 상태·저장 계정·캐시를 삭제하고 입력한 새 authkey로 등록합니다. 완료한 호스트도 강제로 다시 시작할 수 있습니다.
           시작 화면에서 호스트·Tailnet·IP·SSH 서비스 상태를 확인하고 관리자용 리포트를 복사할 수 있습니다.
 
           Tailscale 최신 버전과 SSH를 준비하고 모든 네트워크의 TCP 22를 허용합니다. 기본 관리자 공개키 두 개를 등록합니다.
