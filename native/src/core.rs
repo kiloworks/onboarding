@@ -7,8 +7,8 @@ use std::sync::OnceLock;
 pub struct Machine {
     pub installed: bool,
     pub connected: bool,
-    pub tailnet: String,
-    pub ip: String,
+    pub tailnet: Option<String>,
+    pub ip: Option<String>,
     pub user: String,
     pub sid: String,
     pub ssh_ready: bool,
@@ -61,6 +61,11 @@ pub fn report(events: &[Event], user: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn uninstalled_network_fields_can_be_null() {
+        let machine: Machine = serde_json::from_str(r#"{"installed":false,"connected":false,"tailnet":null,"ip":null,"user":"TEST\\user","sid":"S-1-5-21-1-2-3-1001","sshReady":false}"#).unwrap();
+        assert!(!machine.installed && !machine.connected);
+    }
     #[test]
     fn keys_and_reports() {
         assert!(validate_key(" tskey-auth-test-only-key ").is_ok());

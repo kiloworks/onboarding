@@ -93,13 +93,6 @@ try {
   throw 'Onboarding E2E timed out'
 } catch {
   if (!$E2E -and !$Connected -and !$p.HasExited -and $p.MainWindowHandle -ne 0) {
-    Write-Host "[DEBUG-native-ui] session=$($p.SessionId), hwnd=$($p.MainWindowHandle), title=$($p.MainWindowTitle)"
-    $root = [Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
-    foreach ($id in @('heading','status')) {
-      $condition = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
-      $node = $root.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
-      if ($node) { Write-Host "[DEBUG-native-ui] $id=$($node.Current.Name)" }
-    }
     Capture 'failure'
   }
   throw

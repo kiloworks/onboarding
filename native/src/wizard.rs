@@ -369,7 +369,11 @@ impl Render for Wizard {
                         panel()
                             .child(format!("이 기기의 계정: {}", machine.user))
                             .child(if machine.connected {
-                                format!("현재 연결: {} · {}", machine.tailnet, machine.ip)
+                                format!(
+                                    "현재 연결: {} · {}",
+                                    machine.tailnet.as_deref().unwrap_or("확인 전"),
+                                    machine.ip.as_deref().unwrap_or("확인 전")
+                                )
                             } else {
                                 "아직 Tailscale에 연결되지 않았어요.".into()
                             }),
