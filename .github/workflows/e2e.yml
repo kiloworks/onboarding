@@ -1,15 +1,16 @@
 name: Windows OIDC E2E
 on:
   workflow_dispatch:
-    inputs:
-      build_run_id:
-        description: 'Successful Windows CI run ID for this exact main commit'
-        required: true
-        type: string
 permissions:
   contents: read
 jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ci.yml
   e2e:
+    needs: build
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -25,23 +26,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Validate build provenance
+      - name: Validate WIF configuration
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_RUN_ID: ${{ inputs.build_run_id }}
         run: |
-          if ($env:BUILD_RUN_ID -notmatch '^\d+$') { throw 'Invalid build run ID' }
-          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or $run.head_sha -ne $env:GITHUB_SHA -or $run.conclusion -ne 'success' -or $run.path -ne '.github/workflows/ci.yml') { throw 'Build must be a successful Windows CI run of this exact commit' }
           if (!$env:TS_WIF_CLIENT_ID -or !$env:TS_WIF_AUDIENCE) { throw 'Set TS_WIF_CLIENT_ID and TS_WIF_AUDIENCE repository variables' }
-        # Values are identifiers, not long-lived credentials.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: onboarding-${{ matrix.runner }}
           path: downloaded
-          run-id: ${{ inputs.build_run_id }}
-          github-token: ${{ github.token }}
       - run: ./scripts/prepare-desktop.ps1
       - name: Install tested package
         shell: pwsh

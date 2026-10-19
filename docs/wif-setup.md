@@ -19,7 +19,7 @@ GitHub가 발급하는 실제 subject를 기준으로 설정합니다. 이 저�
 
 저장소 Actions variables에 `TS_WIF_CLIENT_ID`, `TS_WIF_AUDIENCE`를 설정합니다. 장기 secret을 추가하지 않습니다. main과 워크플로 변경 권한을 보호합니다. 환경 기반 보호를 추가한다면 OIDC sub 형태도 함께 바뀌므로 Tailscale 신뢰 설정을 일치시킵니다.
 
-성공한 Windows CI 실행 ID를 입력으로 `Windows OIDC E2E`를 main에서 실행합니다. 코드 SHA와 CI 산출물 SHA가 같아야 합니다. 각 러너는 서로 다른 일회용·사전 승인·ephemeral 키를 발급받고 앱 자체의 입력 흐름으로 등록합니다. 새 설치 검증 전에 Tailscale Action으로 설치·연결하지 않습니다.
+`Windows OIDC E2E`를 main에서 수동 실행합니다. 같은 커밋의 Windows CI를 재사용 워크플로로 먼저 실행하고, 성공한 경우에만 같은 실행의 산출물로 E2E를 진행합니다. 별도 실행 ID 입력이나 REST API의 최종 상태 반영에 의존하지 않습니다. 각 러너는 서로 다른 일회용·사전 승인·ephemeral 키를 발급받고 앱 자체의 입력 흐름으로 등록합니다. 새 설치 검증 전에 Tailscale Action으로 설치·연결하지 않습니다.
 
 ## 정리 및 예외
 
