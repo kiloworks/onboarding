@@ -11,9 +11,6 @@ public class NativeInput {
  [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int x,y; public uint data,flags,time; public UIntPtr extra; }
  [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] input, int size);
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
- [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
- [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
- public static string ForegroundProcess() { uint id; GetWindowThreadProcessId(GetForegroundWindow(), out id); return System.Diagnostics.Process.GetProcessById((int)id).ProcessName; }
  public static void Text(string s) { foreach(char c in s) { var a = new INPUT[2]; a[0].type=a[1].type=1; a[0].u.ki.scan=a[1].u.ki.scan=c; a[0].u.ki.flags=4; a[1].u.ki.flags=6; if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Text input failed"); } }
 }
 '@
@@ -100,7 +97,6 @@ try {
   throw 'Onboarding E2E timed out'
 } catch {
   if (!$E2E -and !$Connected -and !$p.HasExited -and $p.MainWindowHandle -ne 0) {
-    Write-Host "[DEBUG-native-ui] foreground=$([NativeInput]::ForegroundProcess())"
     Capture 'failure'
   }
   throw
