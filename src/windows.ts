@@ -102,7 +102,7 @@ export async function onboard(machine: Machine, key: string, replace: boolean, o
   const helperPath = join(helperDir, 'bootstrap.ps1');
   await writeFile(helperPath, bootstrap, { mode: 0o600 });
   const hash = createHash('sha256').update(bootstrap).digest('hex');
-  const elevated = `$bytes = [IO.File]::ReadAllBytes('${helperPath.replaceAll("'", "''")}'); $sha = [Security.Cryptography.SHA256]::Create(); $hash = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant(); if ($hash -ne '${hash}') { exit 1 }; $Port=${address.port}; $Nonce='${nonce}'; & ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString($bytes)))`;
+  const elevated = `$bytes = [IO.File]::ReadAllBytes('${helperPath.replaceAll("'", "''")}'); $sha = [Security.Cryptography.SHA256]::Create(); $hash = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant(); if ($hash -ne '${hash}') { exit 1 }; $Port=${address.port}; $Nonce='${nonce}'; . ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString($bytes)))`;
   const helper = encode(elevated);
   const launcher = `try { $p = Start-Process -FilePath '${powershell.replaceAll("'", "''")}' -ArgumentList '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${helper}' -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode } catch { exit 1223 }`;
   const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encode(launcher)], { windowsHide: true });
