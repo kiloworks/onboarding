@@ -169,6 +169,9 @@ jobs:
           | x64 | [setup.exe]($base/onboarding-$version-windows-x64-setup.exe) | [.sha256]($base/onboarding-$version-windows-x64-setup.exe.sha256) |
           | ARM64 | [setup.exe]($base/onboarding-$version-windows-arm64-setup.exe) | [.sha256]($base/onboarding-$version-windows-arm64-setup.exe.sha256) |
 
+          기존 Tailscale 상태·저장 계정·캐시를 삭제하고 입력한 새 authkey로 등록합니다. 완료한 호스트도 강제로 다시 시작할 수 있습니다.
+          시작 화면에서 호스트·Tailnet·IP·SSH 서비스 상태를 확인하고 관리자용 리포트를 복사할 수 있습니다.
+
           Tailscale 최신 버전과 SSH를 준비하고 모든 네트워크의 TCP 22를 허용합니다. 기본 관리자 공개키 두 개를 등록합니다.
           실제 Windows 10/11 x64와 물리 보안키 원격 접속은 별도 검증이 필요합니다. OIDC 연결 E2E 결과는 해당 실행을 확인하세요.
           NOTES

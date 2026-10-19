@@ -58,7 +58,7 @@ $ts = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
 $s = $null
 if (Test-Path $ts) { try { $s = (& $ts status --json 2>$null | Out-String) | ConvertFrom-Json } catch {} }
 $ssh = Get-Service sshd -ErrorAction SilentlyContinue
-@{ installed = (Test-Path $ts); connected = ($null -ne $s -and $s.BackendState -eq 'Running'); tailnet = [string]$s.CurrentTailnet.Name; ip = [string]($s.TailscaleIPs | Select-Object -First 1); user = $id.Name; sid = $id.User.Value; sshReady = ($null -ne $ssh -and $ssh.Status -eq 'Running') } | ConvertTo-Json -Compress
+@{ host = $env:COMPUTERNAME; installed = (Test-Path $ts); connected = ($null -ne $s -and $s.BackendState -eq 'Running'); tailnet = [string]$s.CurrentTailnet.Name; ip = [string]($s.TailscaleIPs | Select-Object -First 1); user = $id.Name; sid = $id.User.Value; sshReady = ($null -ne $ssh -and $ssh.Status -eq 'Running') } | ConvertTo-Json -Compress
 "#).stdout(Stdio::piped()).spawn().context("Windows PowerShell을 시작할 수 없습니다.")?;
     let stdout = child.stdout.take().unwrap();
     let reader = std::thread::spawn(move || {
@@ -108,7 +108,6 @@ fn line(reader: &mut impl BufRead) -> Result<Zeroizing<String>> {
 pub fn onboard(
     machine: Machine,
     mut key: Zeroizing<String>,
-    replace: bool,
     mut emit: impl FnMut(Event),
 ) -> Result<()> {
     let nonce = random_hex(32);
@@ -174,14 +173,12 @@ pub fn onboard(
     #[derive(serde::Serialize)]
     struct Config<'a> {
         key: &'a str,
-        replace: bool,
         sid: &'a str,
         keys: Vec<&'a str>,
         session: &'a str,
     }
     let mut payload = Zeroizing::new(serde_json::to_string(&Config {
         key: &key,
-        replace,
         sid: &machine.sid,
         keys: KEYS.lines().filter(|s| !s.is_empty()).collect(),
         session: &session,

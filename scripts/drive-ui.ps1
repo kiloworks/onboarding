@@ -75,16 +75,9 @@ try {
   if ($p.MainWindowHandle -eq 0) { throw 'App did not open a native window' }
   $bounds = ([Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)).Current.BoundingRectangle
   [NativeInput]::Activate($p.MainWindowHandle, [int]($bounds.Left + 100), [int]($bounds.Top + 15))
-  [void](Find 'begin' 60)
+  [void](Find 'machine-status' 60)
   Capture 'welcome'
-  Click 'begin'
-  if ($Connected) {
-    [void](Find 'replace')
-    Click 'next'
-    [void](Find 'start')
-    Click 'back'
-    Click 'replace'
-  }
+  if ($Connected) { Click 'restart' } else { Click 'begin' }
   if (!$E2E) {
     Click 'next'
     if ((Find 'status').Current.Name -notmatch '키') { throw 'Invalid key did not block progression' }

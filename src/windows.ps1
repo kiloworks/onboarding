@@ -83,9 +83,35 @@ function Update-Tailscale {
     if (!(Test-Path $script:ts)) { throw 'Tailscale CLI is missing after installation' }
   } finally { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
 }
+function Reset-Tailscale {
+  if ($script:key.Length -gt 512 -or $script:key -notmatch '^tskey-auth-[A-Za-z0-9_-]{10,}$') { throw 'a new auth key is required' }
+  Send '기존 Tailscale 연결과 저장된 모든 계정·설정을 삭제합니다.'
+  Stop-Service Tailscale -Force
+  Get-Process tailscale-ipn -ErrorAction SilentlyContinue | Stop-Process -Force
+  $paths = @(
+    (Join-Path $env:ProgramData 'Tailscale'),
+    (Join-Path $env:SystemRoot 'System32\config\systemprofile\AppData\Local\Tailscale')
+  )
+  foreach ($profile in (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\*')) {
+    if ($profile.ProfileImagePath) {
+      $paths += Join-Path ([Environment]::ExpandEnvironmentVariables($profile.ProfileImagePath)) 'AppData\Local\Tailscale'
+    }
+  }
+  try {
+    foreach ($path in ($paths | Select-Object -Unique)) {
+      if (Test-Path -LiteralPath $path) {
+        # Refuse links before elevated recursive deletion.
+        $items = @((Get-Item -LiteralPath $path -Force)) + @(Get-ChildItem -LiteralPath $path -Recurse -Force)
+        if ($items | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }) { throw 'Tailscale state directory cannot contain links' }
+        Remove-Item -LiteralPath $path -Recurse -Force
+      }
+    }
+  } finally { Start-Service Tailscale }
+  $script:registered = $false
+}
 function Connect-Tailscale {
   $s = Status
-  if ($s -and $s.BackendState -eq 'Running') { Send '현재 네트워크 연결이 정상입니다. 키를 다시 사용하지 않습니다.'; return }
+  if ($script:registered -and $s -and $s.BackendState -eq 'Running') { return }
   if ($script:key -notmatch '^tskey-auth-[A-Za-z0-9_-]{10,}$') { throw 'a new auth key is required' }
   Send '전달받은 일회용 키로 네트워크에 연결합니다.'
   $pipeName = 'onboarding-key-' + [Guid]::NewGuid().ToString('N')
@@ -114,6 +140,7 @@ function Connect-Tailscale {
   } finally { $pipe.Dispose() }
   $s = Status
   if (!$s -or $s.BackendState -ne 'Running') { throw 'Tailscale is not connected' }
+  $script:registered = $true
   $script:key = ''
 }
 function SSH-ServerPath {
@@ -216,11 +243,7 @@ try {
   if ([string]$config.sid -notmatch '^S-1-5-21-\d+-\d+-\d+-\d+$') { throw 'invalid target SID' }
   $ts = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
   $stage = 'update'; Retry { Update-Tailscale }
-  $stage = 'logout'
-  if ($config.replace) {
-    Send '사용자가 승인한 기존 Tailscale 계정을 로그아웃합니다.'
-    [void](Run-Process $ts @('logout'))
-  }
+  $stage = 'logout'; Reset-Tailscale
   $stage = 'connect'; Retry { Connect-Tailscale }
   $stage = 'ssh'; Retry { Install-SSH }
   $stage = 'verify'

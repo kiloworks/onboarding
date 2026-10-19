@@ -5,6 +5,8 @@ use std::sync::OnceLock;
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Machine {
+    #[serde(default)]
+    pub host: String,
     pub installed: bool,
     pub connected: bool,
     pub tailnet: Option<String>,
@@ -47,6 +49,18 @@ pub fn redact(value: &str) -> String {
         .replace_all(&value, "[토큰 삭제]")
         .into_owned()
 }
+pub fn machine_report(m: &Machine) -> String {
+    redact(&format!(
+        "호스트: {}\nSSH 대상 계정: {}\nTailscale 설치: {} · 연결: {}\nTailnet: {}\nTailscale IP: {}\nSSH 서비스 실행: {}\n관리자 측 원격 접속: 미검증",
+        m.host,
+        m.user,
+        m.installed,
+        m.connected,
+        m.tailnet.as_deref().unwrap_or("없음"),
+        m.ip.as_deref().unwrap_or("없음"),
+        m.ssh_ready
+    ))
+}
 pub fn report(events: &[Event], user: &str) -> String {
     redact(&format!(
         "Onboarding {} — 지원 리포트\nSSH 대상 계정: {user}\nSSH 방화벽: 모든 네트워크의 TCP 22\n관리자 측 원격 접속: 이 앱에서는 검증하지 않음\n{}",
@@ -65,6 +79,34 @@ mod tests {
     fn uninstalled_network_fields_can_be_null() {
         let machine: Machine = serde_json::from_str(r#"{"installed":false,"connected":false,"tailnet":null,"ip":null,"user":"TEST\\user","sid":"S-1-5-21-1-2-3-1001","sshReady":false}"#).unwrap();
         assert!(!machine.installed && !machine.connected);
+    }
+    #[test]
+    fn current_status_can_be_shared_without_install_events() {
+        let machine = Machine {
+            host: "WORKSTATION".into(),
+            user: "PC\\operator".into(),
+            installed: true,
+            connected: true,
+            tailnet: Some("team.example".into()),
+            ip: Some("100.64.0.1".into()),
+            ssh_ready: true,
+            ..Default::default()
+        };
+        let status = machine_report(&machine);
+        for value in [
+            "WORKSTATION",
+            "PC\\operator",
+            "team.example",
+            "100.64.0.1",
+            "미검증",
+        ] {
+            assert!(status.contains(value));
+        }
+        let secret = Machine {
+            tailnet: Some("tskey-auth-secret-value".into()),
+            ..machine
+        };
+        assert!(!machine_report(&secret).contains("secret-value"));
     }
     #[test]
     fn keys_and_reports() {

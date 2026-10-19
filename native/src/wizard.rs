@@ -15,7 +15,7 @@ actions!(
     [
         Advance,
         Back,
-        ToggleConnection,
+        Restart,
         ToggleMotion,
         CopyReport,
         Refresh,
@@ -48,7 +48,6 @@ pub struct Wizard {
     focus: FocusHandle,
     page: Page,
     phase: Phase,
-    replace: bool,
     message: String,
     events: Vec<Event>,
     updates: Receiver<Update>,
@@ -61,7 +60,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("tab", TabNext, Some("Wizard")),
         KeyBinding::new("shift-tab", TabPrevious, Some("Wizard")),
         KeyBinding::new("escape", Back, Some("Wizard")),
-        KeyBinding::new("alt-n", ToggleConnection, Some("Wizard")),
+        KeyBinding::new("alt-n", Restart, Some("Wizard")),
         KeyBinding::new("alt-m", ToggleMotion, Some("Wizard")),
         KeyBinding::new("alt-c", CopyReport, Some("Wizard")),
         KeyBinding::new("alt-r", Refresh, Some("Wizard")),
@@ -79,7 +78,6 @@ impl Wizard {
             focus: cx.focus_handle(),
             page: Page::Intro,
             phase: Phase::Loading,
-            replace: false,
             message: "이 기기의 네트워크와 원격 접속 상태를 확인합니다.".into(),
             events: vec![],
             updates,
@@ -112,7 +110,6 @@ impl Wizard {
     fn inspect(&mut self, cx: &mut Context<Self>) {
         self.phase = Phase::Loading;
         self.page = Page::Intro;
-        self.replace = false;
         self.events.clear();
         self.input.update(cx, |input, _| input.reset());
         let sender = self.sender.clone();
@@ -128,10 +125,13 @@ impl Wizard {
             match update {
                 Update::Inspected(Ok(machine)) => {
                     self.machine = Some(machine);
-                    self.phase = Phase::Ready;
-                    self.message = "관리자에게 받은 키로 이 기기를 준비합니다.".into();
+                    if self.phase != Phase::Done {
+                        self.phase = Phase::Ready;
+                    }
+                    self.message = "현재 상태를 인프라 관리자에게 전달할 수 있습니다.".into();
                 }
                 Update::Inspected(Err(e)) | Update::Finished(Err(e)) => {
+                    self.page = Page::Intro;
                     self.message = core::redact(&e);
                     self.phase = Phase::Error;
                 }
@@ -141,15 +141,17 @@ impl Wizard {
                 }
                 Update::Finished(Ok(())) => {
                     self.phase = Phase::Done;
+                    self.page = Page::Intro;
+                    let sender = self.sender.clone();
+                    std::thread::spawn(move || {
+                        let _ = sender.send(Update::Inspected(
+                            windows::inspect().map_err(|e| core::redact(&e.to_string())),
+                        ));
+                    });
                 }
             }
         }
         changed
-    }
-    fn needs_key(&self) -> bool {
-        self.machine
-            .as_ref()
-            .is_some_and(|m| !m.connected || self.replace)
     }
     fn advance(&mut self, _: &Advance, window: &mut Window, cx: &mut Context<Self>) {
         if self.phase != Phase::Ready {
@@ -158,14 +160,10 @@ impl Wizard {
         match self.page {
             Page::Intro => {
                 self.page = Page::Key;
-                if self.needs_key() {
-                    window.focus(&self.input.focus_handle(cx), cx);
-                }
+                window.focus(&self.input.focus_handle(cx), cx);
             }
             Page::Key => {
-                if self.needs_key()
-                    && let Err(e) = core::validate_key(self.input.read(cx).value())
-                {
+                if let Err(e) = core::validate_key(self.input.read(cx).value()) {
                     self.message = e.to_string();
                     cx.notify();
                     return;
@@ -175,17 +173,13 @@ impl Wizard {
                 window.focus(&self.focus, cx);
             }
             Page::Review => {
-                let key = if self.needs_key() {
-                    match core::validate_key(self.input.read(cx).value()) {
-                        Ok(key) => Zeroizing::new(key),
-                        Err(e) => {
-                            self.message = e.to_string();
-                            cx.notify();
-                            return;
-                        }
+                let key = match core::validate_key(self.input.read(cx).value()) {
+                    Ok(key) => Zeroizing::new(key),
+                    Err(e) => {
+                        self.message = e.to_string();
+                        cx.notify();
+                        return;
                     }
-                } else {
-                    Zeroizing::new(String::new())
                 };
                 self.input.update(cx, |i, _| i.reset());
                 self.phase = Phase::Working;
@@ -194,10 +188,9 @@ impl Wizard {
                 self.message =
                     "필요한 관리자 권한을 요청합니다. Windows 승인 창을 확인해 주세요.".into();
                 let machine = self.machine.clone().unwrap();
-                let replace = self.replace;
                 let sender = self.sender.clone();
                 std::thread::spawn(move || {
-                    let result = windows::onboard(machine, key, replace, |e| {
+                    let result = windows::onboard(machine, key, |e| {
                         let _ = sender.send(Update::Progress(e));
                     })
                     .map_err(|e| core::redact(&e.to_string()));
@@ -217,21 +210,16 @@ impl Wizard {
             cx.notify();
         }
     }
-    fn toggle_connection(
-        &mut self,
-        _: &ToggleConnection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.phase == Phase::Ready
-            && self.page == Page::Key
-            && self.machine.as_ref().is_some_and(|m| m.connected)
+    fn restart(&mut self, _: &Restart, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error) && self.machine.is_some()
         {
-            self.replace = !self.replace;
+            self.phase = Phase::Ready;
+            self.page = Page::Key;
             self.input.update(cx, |i, _| i.reset());
-            if self.replace {
-                window.focus(&self.input.focus_handle(cx), cx);
-            }
+            self.message =
+                "새 등록 키가 필요합니다. 최종 승인 후 기존 Tailscale 설정을 모두 삭제합니다."
+                    .into();
+            window.focus(&self.input.focus_handle(cx), cx);
             cx.notify();
         }
     }
@@ -250,15 +238,22 @@ impl Wizard {
         } else {
             &self.events
         };
-        cx.write_to_clipboard(ClipboardItem::new_string(core::report(
-            events,
-            self.machine.as_ref().map_or("확인 전", |m| &m.user),
-        )));
+        let report = core::report(events, self.machine.as_ref().map_or("확인 전", |m| &m.user));
+        let status = self
+            .machine
+            .as_ref()
+            .map(core::machine_report)
+            .unwrap_or_default();
+        cx.write_to_clipboard(ClipboardItem::new_string(core::redact(&format!(
+            "{status}\n{report}"
+        ))));
         self.message = "지원 리포트를 복사했습니다. 인프라 관리자에게 전달해 주세요.".into();
         cx.notify();
     }
     fn refresh(&mut self, _: &Refresh, _: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.phase, Phase::Done | Phase::Error) {
+        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
+            && self.page == Page::Intro
+        {
             self.inspect(cx);
             cx.notify();
         }
@@ -313,7 +308,7 @@ impl Render for Wizard {
             Phase::Error => "잠시 멈췄어요. 함께 확인해요.",
             Phase::Working => "차근차근 준비하고 있어요.",
             _ => match self.page {
-                Page::Intro => "이 기기를 연결해 볼까요?",
+                Page::Intro => "이 기기의 현재 상태예요.",
                 Page::Key => "연결 정보를 알려주세요.",
                 Page::Review => "시작 전에 확인해 주세요.",
             },
@@ -352,17 +347,9 @@ impl Render for Wizard {
             let machine = self.machine.as_ref().unwrap();
             match self.page {
                 Page::Intro => {
-                    body = body
-                        .child(
-                            panel()
-                                .child("관리자에게 받은 등록 키만 준비해 주세요.")
-                                .child("1. 연결 정보를 입력해요.")
-                                .child("2. 이 기기에 설정할 내용을 확인해요.")
-                                .child("3. 필요한 순간에 Windows 관리자 권한을 요청해요."),
-                        )
-                        .child("입력한 등록 키는 저장하지 않아요.")
-                        .child(spacer())
-                        .child(self.button("begin", "시작하기  ↵", Advance, false, cx));
+                    if !machine.connected {
+                        body = body.child(self.button("begin", "시작하기  ↵", Advance, false, cx));
+                    }
                 }
                 Page::Key => {
                     body = body.child(
@@ -378,30 +365,15 @@ impl Render for Wizard {
                                 "아직 Tailscale에 연결되지 않았어요.".into()
                             }),
                     );
-                    if machine.connected {
-                        body = body.child(self.button(
-                            "replace",
-                            if self.replace {
-                                "✓ 기존 계정 로그아웃 후 새 연결 선택됨 (Alt+N)"
-                            } else {
-                                "현재 연결 유지 · 누르면 다른 네트워크로 변경 (Alt+N)"
-                            },
-                            ToggleConnection,
-                            true,
-                            cx,
-                        ));
-                    }
-                    if self.needs_key() {
-                        body = body
-                            .child("Tailscale 등록 키")
-                            .child(self.input.clone())
-                            .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(rgb(0x536174))
-                                    .child("24시간 유효 · 일회용 · 기기에 저장하지 않음"),
-                            );
-                    }
+                    body = body
+                        .child("Tailscale 등록 키")
+                        .child(self.input.clone())
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(rgb(0x536174))
+                                .child("24시간 유효 · 일회용 · 기기에 저장하지 않음"),
+                        );
                     body = body.child(spacer()).child(
                         div()
                             .flex()
@@ -411,13 +383,8 @@ impl Render for Wizard {
                     );
                 }
                 Page::Review => {
-                    let connection = if self.replace {
-                        "기존 Tailscale 계정 로그아웃 후 새 네트워크에 연결"
-                    } else if machine.connected {
-                        "현재 네트워크 연결 유지"
-                    } else {
-                        "등록 키로 Tailscale 네트워크에 연결"
-                    };
+                    let connection =
+                        "기존 Tailscale 연결·저장된 계정·설정을 모두 삭제하고 입력한 새 키로 등록";
                     const SCOPE: &str = "모든 네트워크에서 SSH 접속(TCP 22번)을 허용해요.";
                     body = body
                         .child(
@@ -463,7 +430,7 @@ impl Render for Wizard {
         if self.phase == Phase::Working {
             let stages = [
                 ("update", "Tailscale 설치 · 업데이트"),
-                ("logout", "기존 계정 로그아웃"),
+                ("logout", "기존 Tailscale 설정 삭제"),
                 ("connect", "네트워크 연결"),
                 ("ssh", "원격 접속 준비"),
                 ("verify", "최종 확인"),
@@ -471,9 +438,6 @@ impl Render for Wizard {
             let active = self.events.last().map(|e| e.stage.as_str()).unwrap_or("");
             let mut list = panel();
             for (id, label) in stages {
-                if id == "logout" && !self.replace {
-                    continue;
-                }
                 let is_active = id == active;
                 list = list.child(
                     div()
@@ -509,21 +473,31 @@ impl Render for Wizard {
                     cx,
                 ));
         }
-        if matches!(self.phase, Phase::Done | Phase::Error) {
-            if let Some(event) = self.events.last().filter(|e| !e.report.is_empty()) {
+        if matches!(self.phase, Phase::Ready | Phase::Done | Phase::Error)
+            && self.page == Page::Intro
+        {
+            if let Some(machine) = &self.machine {
+                let status = core::machine_report(machine);
                 body = body.child(
-                    div()
-                        .id("report")
-                        .accessibility_id("report")
-                        .role(Role::Label)
-                        .aria_value(event.report.clone())
-                        .max_h(px(160.))
-                        .overflow_y_scroll()
-                        .text_size(px(13.))
-                        .child(event.report.clone()),
+                    panel().child(
+                        div()
+                            .id("machine-status")
+                            .accessibility_id("machine-status")
+                            .role(Role::Label)
+                            .aria_value(status.clone())
+                            .child(
+                                div()
+                                    .id("report")
+                                    .accessibility_id("report")
+                                    .role(Role::Label)
+                                    .aria_value(status.clone())
+                                    .child(status),
+                            ),
+                    ),
                 );
             }
             body = body
+                .child(self.button("restart", "강제로 다시 시작하기 (Alt+N)", Restart, true, cx))
                 .child("관리자에게 이 리포트를 전달해 실제 원격 접속을 확인해 주세요.")
                 .child(spacer())
                 .child(
@@ -564,7 +538,7 @@ impl Render for Wizard {
             .on_action(cx.listener(|_, _: &TabPrevious, w, cx| w.focus_prev(cx)))
             .on_action(cx.listener(Self::advance))
             .on_action(cx.listener(Self::back))
-            .on_action(cx.listener(Self::toggle_connection))
+            .on_action(cx.listener(Self::restart))
             .on_action(cx.listener(Self::toggle_motion))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(Self::refresh))
