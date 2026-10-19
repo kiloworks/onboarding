@@ -77,7 +77,7 @@ function Update-Tailscale {
     $signature = Get-AuthenticodeSignature $msi
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Tailscale Inc\.?[, ]') { throw 'installer signature verification failed' }
     Send 'Tailscale을 설치 또는 업데이트합니다. 잠시 기다려 주세요.'
-    $p = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi + '"'), '/qn', '/norestart', 'TS_NOLAUNCH=1', 'TS_ONBOARDING_FLOW=hide') -Wait -PassThru
+    $p = Start-Process (Join-Path $env:WINDIR 'System32/msiexec.exe') -ArgumentList @('/i', ('"' + $msi + '"'), '/qn', '/norestart', 'TS_NOLAUNCH=1', 'TS_ONBOARDING_FLOW=hide') -Wait -PassThru
     if ($p.ExitCode -eq 3010) { $script:reboot = $true }
     elseif ($p.ExitCode -ne 0) { throw "MSI exit $($p.ExitCode)" }
     if (!(Test-Path $script:ts)) { throw 'Tailscale CLI is missing after installation' }
@@ -98,7 +98,7 @@ function Connect-Tailscale {
     $wait = $pipe.WaitForConnectionAsync()
     $info = New-Object Diagnostics.ProcessStartInfo
     $info.FileName = $script:ts
-    $info.Arguments = 'up --auth-key=file:\\.\pipe\' + $pipeName + ' --accept-routes=false --unattended --timeout=90s'
+    $info.Arguments = 'up --auth-key=file:\\.\pipe\' + $pipeName + ' --reset --accept-routes=false --unattended --timeout=90s'
     $info.UseShellExecute = $false; $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
     $p = New-Object Diagnostics.Process; $p.StartInfo = $info
@@ -140,7 +140,7 @@ function Upgrade-OpenSSH {
     Invoke-WebRequest $asset.browser_download_url -OutFile $msi -UseBasicParsing -TimeoutSec 300
     $signature = Get-AuthenticodeSignature $msi
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation[, ]') { throw 'Microsoft OpenSSH installer signature verification failed' }
-    $p = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi + '"'), 'ADDLOCAL=Server', '/qn', '/norestart') -Wait -PassThru
+    $p = Start-Process (Join-Path $env:WINDIR 'System32/msiexec.exe') -ArgumentList @('/i', ('"' + $msi + '"'), 'ADDLOCAL=Server', '/qn', '/norestart') -Wait -PassThru
     if ($p.ExitCode -eq 3010) { $script:reboot = $true }
     elseif ($p.ExitCode -ne 0) { throw "OpenSSH MSI exit $($p.ExitCode)" }
   } finally { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
@@ -199,6 +199,7 @@ function Install-SSH {
     $effective = Run-Process $sshd @('-T', '-C', ('user=' + $local.Name + ',host=localhost,addr=127.0.0.1'))
     if ($effective -notmatch 'pubkeyaccepted(algorithms|keytypes) .*sk-ecdsa-sha2-nistp256@openssh.com') { throw 'OpenSSH does not accept the required security-key algorithm' }
   }
+  if ($effective -notmatch '(?im)^port 22\s*$' -or $effective -notmatch '(?im)^pubkeyauthentication yes\s*$') { throw 'existing SSH configuration must allow public-key authentication on port 22' }
   $expectedFile = if ($isAdmin) { '__PROGRAMDATA__/ssh/administrators_authorized_keys' } else { '.ssh/authorized_keys' }
   if ($effective -notmatch ('(?im)^authorizedkeysfile .*' + [regex]::Escape($expectedFile))) { throw 'existing SSH AuthorizedKeysFile differs from the supported path' }
   Send '기본 공개키 두 개와 SSH 서비스를 설정합니다. 모든 네트워크에서 TCP 22번을 허용합니다.'

@@ -61,7 +61,10 @@ export async function onboard(machine: Machine, key: string, replace: boolean, o
   let authenticated = false;
   let finished = false;
   let timer: ReturnType<typeof setTimeout>;
+  const sockets = new Set<import('node:net').Socket>();
   const server = createServer(socket => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
     if (authenticated) { socket.destroy(); return; }
     let first = true;
     const reader = createInterface({ input: socket });
@@ -109,5 +112,5 @@ export async function onboard(machine: Machine, key: string, replace: boolean, o
   timer = setTimeout(() => fail(new Error('관리자 권한 승인을 기다리는 시간이 초과되었습니다.')), 120_000);
   const deadline = setTimeout(() => fail(new Error('설치 시간이 초과되었습니다. 리포트를 관리자에게 전달해 주세요.')), 45 * 60_000);
   try { await completion; }
-  finally { clearTimeout(timer); clearTimeout(deadline); key = ''; server.close(); await rm(helperDir, { recursive: true, force: true }); }
+  finally { clearTimeout(timer); clearTimeout(deadline); key = ''; for (const socket of sockets) socket.destroy(); server.close(); await rm(helperDir, { recursive: true, force: true }); }
 }

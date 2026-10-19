@@ -52,7 +52,7 @@ bun run dev
 
 GPUIX native UI 테스트는 macOS와 Windows에서 가능합니다. Windows 설치 동작은 Windows에서만 실행합니다. `@gpuix/react`와 `@gpuix/native`는 0.10.0으로 함께 고정합니다.
 
-Windows ARM64의 native npm 패키지가 현재 배포되지 않아 `.github/workflows/native-arm.yml`에서 고정한 upstream commit과 submodule로 직접 빌드합니다. x64는 npm의 대응 바이너리를 사용합니다. Bun 런타임은 설치 파일에 포함되므로 최종 사용자에게 Node/Bun/Rust 설치를 요구하지 않습니다.
+Windows ARM64의 native npm 패키지가 현재 배포되지 않아 `.github/workflows/native-arm.yml`에서 고정한 upstream commit과 submodule로 직접 빌드합니다. x64는 npm의 대응 바이너리를 사용합니다. Bun 런타임과 MSVC app-local DLL은 설치 파일에 포함되므로 최종 사용자에게 Node/Bun/Rust 설치를 요구하지 않습니다.
 
 ```sh
 bun run build

@@ -15,3 +15,6 @@ native dependency licenses. See scripts/licenses.ts for the reproducible
 license collection. Tailscale and Microsoft OpenSSH are separate software
 installed using their official distribution mechanisms; they are not
 redistributed in the Onboarding installer.
+
+Microsoft Visual C++ redistributable CRT DLLs are included app-locally under
+Microsoft redistribution terms. See licenses/Microsoft-CRT.txt.

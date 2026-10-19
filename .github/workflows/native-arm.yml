@@ -37,7 +37,9 @@ jobs:
           $llvm = Join-Path $vs 'VC\Tools\Llvm\ARM64\bin'
           if (!(Test-Path "$llvm\clang.exe")) { throw 'ARM64 Clang is missing' }
           $llvm | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - run: bun install
+      - name: Install native build dependencies only
+        run: npm install --ignore-scripts --workspaces=false --package-lock=false
+        working-directory: packages/native
       - run: bun run build
         working-directory: packages/native
         env:
