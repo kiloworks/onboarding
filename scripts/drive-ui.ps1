@@ -102,6 +102,7 @@ try {
   $windowBounds = ([Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)).Current.BoundingRectangle
   if ($startButton.Current.IsOffscreen -or $startButton.Current.BoundingRectangle.Bottom -gt $windowBounds.Bottom) { throw 'Final consent button is outside the window' }
   if ((Find 'heading').Current.Name -notmatch '시작 전에') { throw 'Missing explicit final review' }
+  if ((Find 'ssh-scope').Current.Name -notmatch '모든 네트워크.*TCP 22' -or (Find 'review-settings').Current.Name -notmatch 'SSH 접속 대상:') { throw 'Missing accessible security consent details' }
   Capture 'review'
   if (!$E2E) { Write-Host 'Native UI input, validation and final consent: PASS'; return }
   Click 'start'

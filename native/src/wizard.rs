@@ -411,27 +411,34 @@ impl Render for Wizard {
                     );
                 }
                 Page::Review => {
+                    let connection = if self.replace {
+                        "기존 Tailscale 계정 로그아웃 후 새 네트워크에 연결"
+                    } else if machine.connected {
+                        "현재 네트워크 연결 유지"
+                    } else {
+                        "등록 키로 Tailscale 네트워크에 연결"
+                    };
+                    const SCOPE: &str = "모든 네트워크에서 SSH 접속(TCP 22번)을 허용해요.";
                     body = body
                         .child(
                             panel()
+                                .id("review-settings").accessibility_id("review-settings")
+                                .role(Role::Group)
+                                .aria_label(format!("SSH 접속 대상: {}. {connection}. Tailscale 최신 버전과 Windows SSH 서버 준비. 기본 관리자 공개키 두 개 등록.", machine.user))
                                 .child(format!("SSH 접속 대상: {}", machine.user))
-                                .child(if self.replace {
-                                    "기존 Tailscale 계정 로그아웃 후 새 네트워크에 연결"
-                                } else if machine.connected {
-                                    "현재 네트워크 연결 유지"
-                                } else {
-                                    "등록 키로 Tailscale 네트워크에 연결"
-                                })
+                                .child(connection)
                                 .child("Tailscale 최신 버전과 Windows SSH 서버 준비")
                                 .child("기본 관리자 공개키 두 개 등록"),
                         )
                         .child(
                             div()
+                                .id("ssh-scope").accessibility_id("ssh-scope")
+                                .role(Role::Label).aria_label(SCOPE)
                                 .bg(rgb(0xfff7ed))
                                 .text_color(rgb(0x8b4b18))
                                 .p_4()
                                 .rounded_lg()
-                                .child("모든 네트워크에서 SSH 접속(TCP 22번)을 허용해요."),
+                                .child(SCOPE),
                         )
                         .child(
                             "아래 버튼을 누르면 이 설정에 동의하고 Windows 승인 창으로 이동해요.",
