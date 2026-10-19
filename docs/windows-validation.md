@@ -1,5 +1,12 @@
 # Windows 검증 계획
 
+## 사용자 실기 검증 기록
+
+- 2026-10-19: magneto가 Rust GPUI 전환 후 ARM 기기에서 실행과 SSH 접속 성공을 확인했다. Windows 빌드 번호, SSH 접속 경로와 실제 FIDO 하드웨어 사용 여부는 확인하지 않았다.
+- 설치파일 다운로드가 Edge의 유지 선택 후에도 차단되고, Defender 실시간 보호를 끄면 다운로드된다는 보고가 있다. 제공된 보호 기록은 `Trojan:Win32/Wacatac.B!ml`, 상태 제거됨이며, Discord 첨부파일 `onboarding-0.2.0-windows-x64-setup.exe`를 받던 `.crdownload`가 대상이다. ARM 실행 성공과 이 x64 파일 탐지는 별도 증거로 취급한다. Discord 파일과 공식 릴리스의 바이트 일치 및 오탐 여부는 확인하지 않았다. 실시간 보호 해제는 배포 해결책으로 채택하지 않는다.
+- 공식 v0.2.0 x64 릴리스 설치파일 SHA-256 재확인: `7471d1fd6d57abc054e14646a3b99739e0a66dc71de3fca0f2bd0d8154fe22d4`.
+- 후속 보호 기록에서 GitHub 공식 릴리스 다운로드(`release-assets.githubusercontent.com`, x64 설치파일)도 동일한 `Trojan:Win32/Wacatac.B!ml` 판정으로 제거됨을 확인했다. Discord 경로에만 국한된 현상이 아니다. 설치파일 또는 내부 구성요소 중 어느 부분이 탐지 원인인지는 아직 확인하지 않았다.
+
 ## 확정 요구사항
 
 2026-10-19 magneto 요청: 실제 클라이언트인 Windows 10 x64와 Windows 11 x64를 지원하고, GitHub Actions에서 가능한 범위까지 실제 E2E를 수행한다.
