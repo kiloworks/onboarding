@@ -12,7 +12,8 @@ import { redact, type Event, type Machine } from './core';
 export const powershell = process.platform === 'win32'
   ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   : 'powershell.exe';
-const encode = (script: string) => Buffer.from(script, 'utf16le').toString('base64');
+// PowerShell 7 callers can prepend incompatible Core modules to the inherited search path.
+const encode = (script: string) => Buffer.from('$env:PSModulePath = "$PSHOME\\Modules;" + $env:PSModulePath; ' + script, 'utf16le').toString('base64');
 
 async function psJson(script: string): Promise<Machine> {
   const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encode(script)], { windowsHide: true });
@@ -44,7 +45,7 @@ $ssh = Get-Service sshd -ErrorAction SilentlyContinue
 }
 
 export async function copyReport(text: string): Promise<void> {
-  const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-Command', '[Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false); [Console]::In.ReadToEnd() | Set-Clipboard'], { windowsHide: true });
+  const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encode('[Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false); [Console]::In.ReadToEnd() | Set-Clipboard')], { windowsHide: true });
   child.stdin.end(redact(text)); child.stdout.resume(); child.stderr.resume();
   await new Promise<void>((resolve, reject) => {
     child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(new Error('복사하지 못했습니다. 리포트 텍스트를 선택해 복사해 주세요.')));
