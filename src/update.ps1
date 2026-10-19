@@ -34,6 +34,7 @@ if ($Mode -eq 'check') {
     Verify-Update "$installer.manifest.json" "$installer.sig" $installer $PublicKey $Version $Arch $name
     # Recheck the exact bytes immediately before launch; never trust a persisted verification flag.
     $helper = @'
+$env:PSModulePath = "$PSHOME\Modules;" + $env:PSModulePath
 $ErrorActionPreference = 'Stop'
 $stage = '앱 종료 대기'
 try {

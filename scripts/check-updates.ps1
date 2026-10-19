@@ -58,17 +58,20 @@ try {
         $app = Start-Process (Join-Path $InstallDir 'onboarding.exe') -ArgumentList '--smoke-gui' -PassThru
         $ParentId = $app.Id
         $replacement = $null
+        $helperLog = Join-Path $env:LOCALAPPDATA 'Kiloworks/Onboarding/update.log'
+        Remove-Item -LiteralPath $helperLog -ErrorAction SilentlyContinue
         try {
             . "$root/src/update.ps1"
             $deadline = [DateTime]::UtcNow.AddSeconds(90)
             do {
                 $replacement = Get-Process onboarding -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $app.Id -and $_.Path -eq (Join-Path $InstallDir 'onboarding.exe') } | Select-Object -First 1
                 if ($replacement) { $replacement.Refresh(); if ($replacement.MainWindowHandle -ne 0) { break } }
+                if (Test-Path -LiteralPath $helperLog) { break }
                 Start-Sleep -Milliseconds 200
             } while ([DateTime]::UtcNow -lt $deadline)
             if (!$replacement -or $replacement.MainWindowHandle -eq 0) {
                 $app.Refresh()
-                $log = Get-Content (Join-Path $env:LOCALAPPDATA 'Kiloworks/Onboarding/update.log') -Raw -ErrorAction SilentlyContinue
+                $log = Get-Content -LiteralPath $helperLog -Raw -ErrorAction SilentlyContinue
                 throw "Updated app did not restart with a native window. Original exited: $($app.HasExited). Helper: $log"
             }
             $app.Refresh()
