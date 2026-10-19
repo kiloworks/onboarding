@@ -17,7 +17,7 @@ try {
     New-Item -ItemType Directory -Path "$temp/config", "$temp/release" | Out-Null
     $public = $rsa.ToXmlString($false)
     [IO.File]::WriteAllText("$temp/config/update-public-key.xml", $public)
-    foreach ($arch in @('x64','arm64')) { [IO.File]::WriteAllText("$temp/release/onboarding-0.4.0-windows-$arch-setup.exe", 'fixture installer') }
+    foreach ($fixtureArch in @('x64','arm64')) { [IO.File]::WriteAllText("$temp/release/onboarding-0.4.0-windows-$fixtureArch-setup.exe", 'fixture installer') }
     $env:ONBOARDING_UPDATE_PRIVATE_KEY = $rsa.ToXmlString($true)
     Push-Location $temp
     try { & "$root/scripts/sign-updates.ps1" -Version '0.4.0' } finally { Pop-Location }
@@ -66,7 +66,11 @@ try {
                 if ($replacement) { $replacement.Refresh(); if ($replacement.MainWindowHandle -ne 0) { break } }
                 Start-Sleep -Milliseconds 200
             } while ([DateTime]::UtcNow -lt $deadline)
-            if (!$replacement -or $replacement.MainWindowHandle -eq 0) { throw 'Updated app did not restart with a native window' }
+            if (!$replacement -or $replacement.MainWindowHandle -eq 0) {
+                $app.Refresh()
+                $log = Get-Content (Join-Path $env:LOCALAPPDATA 'Kiloworks/Onboarding/update.log') -Raw -ErrorAction SilentlyContinue
+                throw "Updated app did not restart with a native window. Original exited: $($app.HasExited). Helper: $log"
+            }
             $app.Refresh()
             if (!$app.HasExited) { throw 'Installer did not wait for the original app to exit' }
             if ((Get-Content (Join-Path $InstallDir 'user-data.txt') -Raw).Trim() -ne 'preserve user data') { throw 'Update lost user data' }

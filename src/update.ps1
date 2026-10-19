@@ -35,16 +35,26 @@ if ($Mode -eq 'check') {
     # Recheck the exact bytes immediately before launch; never trust a persisted verification flag.
     $helper = @'
 $ErrorActionPreference = 'Stop'
+$stage = '앱 종료 대기'
 try {
     $parent = Get-Process -Id $ParentId -ErrorAction SilentlyContinue
     if ($parent) { $parent.WaitForExit() }
+    $stage = '설치 파일 재검증'
     Verify-Update "$Installer.manifest.json" "$Installer.sig" $Installer $PublicKey $Version $Arch ([IO.Path]::GetFileName($Installer))
+    $stage = '설치 프로그램 실행'
     $p = Start-Process -FilePath $Installer -ArgumentList @('/S', "/D=$InstallDir") -PassThru -Wait
     if ($p.ExitCode -ne 0) { throw "설치 실패: $($p.ExitCode)" }
+    $stage = '앱 재실행'
     Start-Process -FilePath (Join-Path $InstallDir 'onboarding.exe')
 } catch {
+    $failure = $_
+    try {
+        $log = Join-Path $env:LOCALAPPDATA 'Kiloworks/Onboarding/update.log'
+        New-Item -ItemType Directory -Force (Split-Path $log -Parent) | Out-Null
+        [IO.File]::WriteAllText($log, "$([DateTime]::UtcNow.ToString('o')) $stage : $failure`n$($failure.ScriptStackTrace)")
+    } catch {}
     Add-Type -AssemblyName PresentationFramework
-    [Windows.MessageBox]::Show("업데이트 실패. 기존 앱을 다시 실행하거나 설치 파일로 복구해 주세요.`n$($_.Exception.Message)", 'Onboarding 업데이트') | Out-Null
+    [Windows.MessageBox]::Show("업데이트 실패. 기존 앱을 다시 실행하거나 설치 파일로 복구해 주세요.`n$($failure.Exception.Message)", 'Onboarding 업데이트') | Out-Null
 } finally {
     Remove-Item -LiteralPath $Directory -Recurse -Force -ErrorAction SilentlyContinue
 }
