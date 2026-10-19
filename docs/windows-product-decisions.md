@@ -37,6 +37,6 @@
 ## 검증
 
 - GHA windows-2022, windows-2025, windows-11-arm 세 러너를 유지한다.
-- 실제 연결 자동 E2E는 GitHub OIDC와 Tailscale WIF로 tag:gha ephemeral 기기를 등록하고 작업 후 제거한다. 장기 Tailscale 자격 증명을 GHA에 저장하지 않는다.
+- 실제 연결 자동 E2E는 GitHub OIDC와 Tailscale WIF로 tag:gha ephemeral 기기를 등록하고 작업 후 제거한다. 장기 Tailscale 자격 증명을 GHA에 저장하지 않는다. 실제 credential의 허용 태그는 tag:gha-smoke-test-node여서 현재 구현은 그 이름을 사용한다.
 - 첫 릴리스 전 Windows 10 x64와 Windows 11 x64의 VM/실기에서 수동 검증을 보완한다. 환경은 아직 확보하지 않았다.
 - ARM64 native 빌드·패키징·실행을 검증하고 기본 보안키 두 개의 SSH 호환성도 확인한다. 표준 사용자 UAC 경로와 기존 설치 업데이트·tailnet 전환은 별도 시나리오에 포함한다.

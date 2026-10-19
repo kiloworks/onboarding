@@ -117,10 +117,14 @@ function Connect-Tailscale {
   $script:key = ''
 }
 function SSH-ServerPath {
-  foreach ($candidate in @((Join-Path $env:ProgramFiles 'OpenSSH/sshd.exe'), (Join-Path $env:WINDIR 'System32/OpenSSH/sshd.exe'))) {
-    if (Test-Path $candidate) { return $candidate }
-  }
-  throw 'OpenSSH Server is missing'
+  $service = Get-CimInstance Win32_Service -Filter "Name='sshd'"
+  if (!$service) { throw 'OpenSSH Server service is missing' }
+  $path = [Environment]::ExpandEnvironmentVariables([string]$service.PathName)
+  $match = [regex]::Match($path, '^(?:"([^"\r\n]+\.exe)"|(.+?\.exe))(?:\s|$)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+  if (!$match.Success) { throw 'OpenSSH Server service path is invalid' }
+  $exe = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
+  if (!(Test-Path $exe) -or (Split-Path $exe -Leaf) -ne 'sshd.exe') { throw 'OpenSSH Server executable is missing' }
+  return $exe
 }
 function Upgrade-OpenSSH {
   Send '기본 보안키를 지원하는 Microsoft OpenSSH 서버로 업데이트합니다.'

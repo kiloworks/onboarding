@@ -26,7 +26,7 @@ Server 러너 합격을 Windows 10/11 x64 클라이언트 합격으로 표기하
 
 ## 아직 결정할 사항
 
-- 실제 E2E는 [GitHub OIDC 결정](adr/0004-github-oidc-e2e.md)에 따라 Tailscale WIF와 tag:gha를 사용한다. 실제 tailnet·Client ID·audience·claim 제한 설정과 사용자 소유 등록의 별도 검증 방법은 준비가 필요하다.
+- 실제 E2E는 [GitHub OIDC 결정](adr/0004-github-oidc-e2e.md)에 따라 Tailscale WIF와 tag:gha-smoke-test-node를 사용한다. 실제 tailnet·Client ID·audience·claim 제한 설정과 사용자 소유 등록의 별도 검증 방법은 준비가 필요하다.
 - Windows 10/11 x64 실제 클라이언트 VM 또는 실기 검증 환경과 릴리스 승인 조건.
 - ARM64는 첫 출시 정식 지원 대상이며 native 배포 경로의 실제 GPUIX·런타임 지원 확인이 필요하다.
 

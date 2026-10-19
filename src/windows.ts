@@ -108,7 +108,7 @@ export async function onboard(machine: Machine, key: string, replace: boolean, o
   const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', encode(launcher)], { windowsHide: true });
   child.stdout.resume(); child.stderr.resume();
   child.once('error', () => fail(new Error('관리자 작업을 시작하지 못했습니다.')));
-  child.once('exit', code => { if (!finished) fail(new Error(code === 1223 ? '관리자 권한 요청이 취소되었습니다. 변경을 시작하지 않았습니다.' : '관리자 작업이 종료되었습니다. 상태를 확인하고 다시 시도해 주세요.')); });
+  child.once('exit', code => { if (!finished && !authenticated) fail(new Error(code === 1223 ? '관리자 권한 요청이 취소되었습니다. 변경을 시작하지 않았습니다.' : '관리자 작업이 종료되었습니다. 상태를 확인하고 다시 시도해 주세요.')); });
   timer = setTimeout(() => fail(new Error('관리자 권한 승인을 기다리는 시간이 초과되었습니다.')), 120_000);
   const deadline = setTimeout(() => fail(new Error('설치 시간이 초과되었습니다. 리포트를 관리자에게 전달해 주세요.')), 45 * 60_000);
   try { await completion; }

@@ -6,9 +6,14 @@ import { redact } from '../src/core';
 const mask = (value: string) => console.log(`::add-mask::${value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`);
 async function json(url: string, init: RequestInit) {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(60_000) });
-  if (!response.ok) throw new Error(`Request failed: ${new URL(url).pathname} HTTP ${response.status}`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const detail = ['error', 'error_description', 'message'].map(field => typeof body[field] === 'string' ? body[field] : '').filter(Boolean).join(' ');
+    throw new Error(`Request failed: ${new URL(url).pathname} HTTP ${response.status} ${redact(detail).slice(0, 250)}`);
+  }
   return response.json() as Promise<Record<string, any>>;
 }
+const TEST_TAG = 'tag:gha-smoke-test-node';
 const ts = join(process.env.ProgramFiles || 'C:\\Program Files', 'Tailscale', 'tailscale.exe');
 let app: Awaited<ReturnType<typeof launch>> | undefined;
 let access = '', keyId = '';
@@ -29,7 +34,7 @@ try {
   mask(access);
   const auth = await json('https://api.tailscale.com/api/v2/tailnet/-/keys', {
     method: 'POST', headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ capabilities: { devices: { create: { reusable: false, ephemeral: true, preauthorized: true, tags: ['tag:gha'] } } }, expirySeconds: 86400, description: `onboarding-${process.env.GITHUB_RUN_ID}-${process.env.RUNNER_NAME}` }),
+    body: JSON.stringify({ capabilities: { devices: { create: { reusable: false, ephemeral: true, preauthorized: true, tags: [TEST_TAG] } } }, expirySeconds: 86400, description: `onboarding-${process.env.GITHUB_RUN_ID}-${process.env.RUNNER_NAME}` }),
   });
   if (!auth.key) throw new Error('Tailscale returned no auth key.');
   mask(auth.key); keyId = auth.id;
@@ -48,7 +53,7 @@ try {
   assert.equal(status.status, 0);
   const state = JSON.parse(status.stdout);
   assert.equal(state.BackendState, 'Running');
-  assert.ok(state.Self.Tags.includes('tag:gha'));
+  assert.ok(state.Self.Tags.includes(TEST_TAG));
   const ssh = spawnSync('pwsh', ['-NoProfile', '-File', 'scripts/check-ssh.ps1'], { encoding: 'utf8', windowsHide: true, timeout: 120_000 });
   if (ssh.status !== 0) throw new Error(redact(ssh.stderr || 'SSH authentication check failed'));
   console.log(redact(ssh.stdout));

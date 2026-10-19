@@ -20,3 +20,7 @@
 - https://tailscale.com/docs/features/workload-identity-federation
 - https://tailscale.com/docs/integrations/github/github-action
 - https://github.com/tailscale/github-action
+
+## 실제 WIF 설정 반영
+
+2026-10-19 실제 credential이 허용한 태그는 `tag:gha-smoke-test-node`로 확인되어, 처음 제안한 `tag:gha` 대신 이 테스트 전용 태그를 사용한다. 기존 credential scope와 운영 ACL을 넓히지 않는다. GitHub의 실제 subject는 `repo:kiloworks@265963833/onboarding@1425032376:ref:refs/heads/main`으로 관찰되어 그 값에 정확히 제한한다.
