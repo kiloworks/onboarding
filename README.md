@@ -52,7 +52,15 @@ bun run dev
 
 GPUIX native UI 테스트는 macOS와 Windows에서 가능합니다. Windows 설치 동작은 Windows에서만 실행합니다. `@gpuix/react`와 `@gpuix/native`는 0.10.0으로 함께 고정합니다.
 
-Windows ARM64의 native npm 패키지가 현재 배포되지 않아 `.github/workflows/native-arm.yml`에서 고정한 upstream commit과 submodule로 직접 빌드합니다. x64는 npm의 대응 바이너리를 사용합니다. Bun 런타임과 MSVC app-local DLL은 설치 파일에 포함되므로 최종 사용자에게 Node/Bun/Rust 설치를 요구하지 않습니다.
+Windows x64·ARM64 렌더러는 `.github/workflows/native-arm.yml`에서 고정한 upstream commit과 submodule로 직접 빌드합니다. npm 0.10.0에 없는 폰트 등록 API를 사용해 Pretendard Regular·SemiBold 1.3.9를 앱 내부에 포함합니다. 외부 폰트 다운로드나 시스템 폰트 설치는 없습니다. Bun 런타임과 MSVC app-local DLL도 포함되어 최종 사용자에게 Node/Bun/Rust 설치를 요구하지 않습니다.
+
+Windows에서 로컬 개발·UI 테스트·빌드하기 전, 성공한 Windows CI 실행 ID로 대응하는 렌더러를 받습니다. 아래 `RUN_ID`를 해당 ID로 바꾸고 ARM64라면 artifact 이름을 `gpuix-win32-arm64`로 바꾸세요. macOS에서 UI 레이아웃만 확인할 때는 npm 렌더러의 시스템 폰트로 표시되며 Windows Pretendard 검증을 대체하지 않습니다.
+
+```sh
+gh run download RUN_ID --repo kiloworks/onboarding --name gpuix-win32-x64 --dir node_modules/@gpuix/native
+```
+
+화면은 웹뷰가 아닌 GPUI 네이티브 렌더링입니다. 밝은 단계별 마법사, 짧은 화면 전환과 진행 표시, 모션 줄이기를 제공합니다. UnoCSS가 생성하는 브라우저 CSS는 직접 적용되지 않아 GPUIX의 스타일 객체를 사용합니다. [패키지 용량 분석](docs/footprint.md)도 참고하세요.
 
 ```sh
 bun run build
@@ -65,4 +73,4 @@ bun scripts/licenses.ts
 
 ## 라이선스
 
-앱 소스는 MIT입니다. GPUIX와 포함 런타임은 각 라이선스를 따릅니다. 설치 파일의 `licenses` 디렉토리와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 확인하세요. 기존 비공개 tailscale-onboarding의 목적과 흐름을 참고했으며 그 소스와 자격 증명을 복사하지 않았습니다.
+앱 소스는 MIT입니다. GPUIX와 포함 런타임은 각 라이선스를 따릅니다. 설치 파일의 `licenses` 디렉토리와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 확인하세요. 내용이 완전히 동일한 라이선스는 원문 한 벌과 `LICENSE-INDEX.json`의 구성요소별 참조로 보존합니다. Pretendard 원본은 SIL OFL 1.1로 배포합니다. 기존 비공개 tailscale-onboarding의 목적과 흐름을 참고했으며 그 소스와 자격 증명을 복사하지 않았습니다.

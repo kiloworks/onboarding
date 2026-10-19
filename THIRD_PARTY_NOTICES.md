@@ -2,7 +2,7 @@
 
 Onboarding uses GPUIX (@gpuix/react and @gpuix/native 0.10.0), Apache-2.0,
 Copyright the GPUIX contributors: https://github.com/remorses/gpuix.
-The ARM64 binding is built from commit 515df198fef2685f5ed7dd120bf0db638eb5c360.
+The x64 and ARM64 bindings are built from commit 515df198fef2685f5ed7dd120bf0db638eb5c360.
 GPUIX includes GPUI from the Zed project and other Rust dependencies.
 
 React is MIT licensed, Copyright Meta Platforms, Inc. and affiliates.
@@ -18,3 +18,7 @@ redistributed in the Onboarding installer.
 
 Microsoft Visual C++ redistributable CRT DLLs are included app-locally under
 Microsoft redistribution terms. See licenses/Microsoft-CRT.txt.
+
+Pretendard Regular and SemiBold 1.3.9, Copyright Kil Hyung-jin and the upstream
+font authors, are distributed unmodified under the SIL Open Font License 1.1.
+See licenses/Pretendard-OFL.txt and https://github.com/orioncactus/pretendard.

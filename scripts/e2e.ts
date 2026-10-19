@@ -41,9 +41,11 @@ try {
   const executable = process.env.ONBOARDING_EXE;
   if (!executable) throw new Error('ONBOARDING_EXE is required.');
   app = await launch({ command: executable, args: [], env: { ...process.env, GPUIX_BACKGROUND: '1' } });
-  await app.getByTestId('start').waitFor({ timeoutMs: 60_000 });
+  await app.getByTestId('begin').waitFor({ timeoutMs: 60_000 });
+  await app.getByTestId('begin').click();
   await app.getByTestId('auth-key').fill(auth.key);
   auth.key = '';
+  await app.getByTestId('next').click();
   await app.getByTestId('start').click();
   let lastProgress = '';
   const progress = setInterval(() => {

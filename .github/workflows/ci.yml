@@ -40,7 +40,7 @@ jobs:
           name: gpuix-win32-${{ matrix.arch }}
           path: node_modules/@gpuix/native
       - run: bun run typecheck
-      - run: bun test tests/core.test.ts
+      - run: bun test tests
       - run: ./scripts/check-windows.ps1
       - run: New-Item -ItemType Directory -Force artifacts | Out-Null
       - run: bun run test:ui
@@ -52,6 +52,18 @@ jobs:
         with:
           name: gpuix-native-licenses-${{ matrix.arch }}
           path: dist/licenses/native
+      - run: bun scripts/dedupe-licenses.ts
+      - name: Report installed payload size
+        shell: pwsh
+        run: |
+          $report = @{
+            arch = '${{ matrix.arch }}'
+            payloadBytes = (Get-ChildItem dist -Recurse -File | Measure-Object Length -Sum).Sum
+            appBytes = (Get-Item dist/onboarding.exe).Length
+            rendererBytes = (Get-Item dist/gpuix-native.node).Length
+            licenseBytes = (Get-ChildItem dist/licenses -Recurse -File | Measure-Object Length -Sum).Sum
+          }
+          $report | ConvertTo-Json | Tee-Object -FilePath artifacts/size.json
       - name: Package installer
         shell: pwsh
         run: |
@@ -67,6 +79,14 @@ jobs:
           $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$install") -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Installer failed' }
           if (!(Test-Path "$install\onboarding.exe") -or !(Test-Path "$install\gpuix-native.node")) { throw 'Missing installed app' }
+          $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding'
+          if ((Get-ItemProperty $registry).UninstallString -ne ('"' + $install + '\Uninstall.exe"')) { throw 'Invalid Windows uninstall command' }
+          Set-ItemProperty $registry UninstallString ('$"' + $install + '\Uninstall.exe$"')
+          'old generated notice' | Set-Content "$install\licenses\old-generated-notice.txt"
+          'preserve user data' | Set-Content "$install\user-data.txt"
+          $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$install") -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or (Test-Path "$install\licenses\old-generated-notice.txt")) { throw 'Upgrade did not replace generated notices' }
+          if (!(Test-Path "$install\user-data.txt") -or !(Test-Path "$install\licenses\LICENSE-INDEX.json")) { throw 'Upgrade lost user data or license index' }
           $env:GPUIX_BACKGROUND = '1'
           $p = Start-Process "$install\onboarding.exe" -ArgumentList '--smoke-gui' -PassThru
           if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Packaged GUI did not finish smoke launch' }
@@ -85,7 +105,8 @@ jobs:
           path: |
             dist/*-setup.exe
             dist/*.sha256
-            artifacts/ui-complete.png
+            artifacts/ui-*.png
+            artifacts/size.json
           if-no-files-found: error
           retention-days: 7
   release:
@@ -116,4 +137,14 @@ jobs:
           실제 Windows 10/11 x64, UAC 및 보안키 하드웨어 접속 검증은 별도 필요합니다.
           OIDC 실제 연결 E2E는 WIF 설정 후 별도 실행해야 합니다. CI 합격을 실제 연결 E2E 합격으로 해석하지 마세요.
           NOTES
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --title "Onboarding $GITHUB_REF_NAME — Windows preview" --notes-file notes.txt release/*
+          version="${GITHUB_REF_NAME#v}"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          cat > downloads.txt <<TABLE
+          | Windows | 설치 파일 | SHA-256 체크섬 |
+          | --- | --- | --- |
+          | x64 | [setup.exe]($base/onboarding-$version-windows-x64-setup.exe) | [.sha256]($base/onboarding-$version-windows-x64-setup.exe.sha256) |
+          | ARM64 | [setup.exe]($base/onboarding-$version-windows-arm64-setup.exe) | [.sha256]($base/onboarding-$version-windows-arm64-setup.exe.sha256) |
+
+          TABLE
+          cat notes.txt >> downloads.txt
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --title "Onboarding $GITHUB_REF_NAME — Windows preview" --notes-file downloads.txt release/*

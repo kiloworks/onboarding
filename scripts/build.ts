@@ -6,7 +6,7 @@ const native = resolve(`node_modules/@gpuix/native/gpuix-native.win32-${process.
 await copyFile(native, 'dist/gpuix-native.node');
 const result = await Bun.build({
   entrypoints: ['./src/entry.ts'],
-  compile: { outfile: 'dist/onboarding.exe', windows: { hideConsole: true, title: 'Kiloworks Onboarding', publisher: 'kiloworks', version: '0.1.0', description: 'Tailscale and SSH onboarding' } },
+  compile: { outfile: 'dist/onboarding.exe', windows: { hideConsole: true, title: 'Kiloworks Onboarding', publisher: 'kiloworks', version: '0.1.1', description: 'Tailscale and SSH onboarding' } },
   minify: true,
 });
 if (!result.success) throw new Error(result.logs.map(String).join('\n'));
