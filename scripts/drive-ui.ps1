@@ -22,7 +22,14 @@ public class NativeInput {
    SetForegroundWindow(hwnd);
    if (GetForegroundWindow() != hwnd) Click(x,y);
  }
- public static void Text(string s) { foreach(char c in s) { var a = new INPUT[2]; a[0].type=a[1].type=1; a[0].u.ki.scan=a[1].u.ki.scan=c; a[0].u.ki.flags=4; a[1].u.ki.flags=6; if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Text input failed"); } }
+ [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr SendMessageTimeoutW(IntPtr hwnd, uint msg, UIntPtr wparam, IntPtr lparam, uint flags, uint timeout, out UIntPtr result);
+ // Keep credentials inside this HWND even if another desktop window steals focus.
+ public static void Text(IntPtr hwnd, string s) {
+   foreach(char c in s) {
+     UIntPtr result;
+     if(SendMessageTimeoutW(hwnd, 0x0102, new UIntPtr(c), IntPtr.Zero, 2, 5000, out result)==IntPtr.Zero) throw new Exception("Native text input failed");
+   }
+ }
 }
 '@
 function Find([string]$Id, [int]$Timeout = 30) {
@@ -87,7 +94,7 @@ try {
   $fieldBounds = $keyField.Current.BoundingRectangle
   [NativeInput]::Click([int]($fieldBounds.Left + $fieldBounds.Width / 2), [int]($fieldBounds.Top + $fieldBounds.Height / 2))
   Start-Sleep -Milliseconds 300
-  [NativeInput]::Text($key)
+  [NativeInput]::Text($p.MainWindowHandle, $key)
   Start-Sleep -Milliseconds 300
   $key = $null
   Click 'next'
