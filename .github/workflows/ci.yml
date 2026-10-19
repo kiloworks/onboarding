@@ -106,8 +106,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir release
-          cp artifacts/onboarding-windows-2025/*-setup.exe* release/
-          cp artifacts/onboarding-windows-11-arm/*-setup.exe* release/
+          cp artifacts/onboarding-windows-2025/dist/*-setup.exe* release/
+          cp artifacts/onboarding-windows-11-arm/dist/*-setup.exe* release/
           cat > notes.txt <<'NOTES'
           Windows x64·ARM64용 미서명 테스트 릴리스입니다.
           관리자가 전달한 Tailscale 일회용 키를 첫 실행에 입력합니다.
