@@ -42,12 +42,16 @@ try {
   await app.getByTestId('start').click();
   await app.getByTestId('copy-report').waitFor({ timeoutMs: 30 * 60_000 });
   const heading = await app.getByTestId('heading').textContent();
-  assert.ok(heading.includes('준비가 됐어요'), 'onboarding did not complete; inspect sanitized support report');
+  const detail = await app.getByTestId('status').textContent();
+  assert.ok(heading.includes('준비가 됐어요'), `Onboarding did not complete: ${redact(detail)}`);
   const status = spawnSync(ts, ['status', '--json'], { encoding: 'utf8', windowsHide: true });
   assert.equal(status.status, 0);
   const state = JSON.parse(status.stdout);
   assert.equal(state.BackendState, 'Running');
   assert.ok(state.Self.Tags.includes('tag:gha'));
+  const ssh = spawnSync('pwsh', ['-NoProfile', '-File', 'scripts/check-ssh.ps1'], { encoding: 'utf8', windowsHide: true, timeout: 120_000 });
+  if (ssh.status !== 0) throw new Error(redact(ssh.stderr || 'SSH authentication check failed'));
+  console.log(redact(ssh.stdout));
   console.log('Real packaged GUI → OIDC-minted one-off key → Tailscale + SSH setup: PASS');
 } catch (e) {
   // Do not let automation diagnostics print the filled key or the native tree.

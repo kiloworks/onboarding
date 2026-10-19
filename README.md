@@ -30,7 +30,7 @@ Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비
 GHA 매트릭스: `windows-2022`, `windows-2025`, `windows-11-arm`.
 
 - 일반 CI: 타입 검사·핵심 로직·PowerShell 검사·GPUIX native UI 테스트·CPU별 빌드·설치 프로그램 설치/실행/제거.
-- 별도 OIDC E2E: GitHub OIDC를 Tailscale WIF로 교환하여 일회용 tag:gha ephemeral 키를 발급하고 실제 앱에 입력, 실제 연결 및 SSH 준비를 확인한 뒤 로그아웃·미사용 키 정리.
+- 별도 OIDC E2E: GitHub OIDC를 Tailscale WIF로 교환하여 일회용 tag:gha ephemeral 키를 발급하고 실제 앱에 입력, 실제 연결·SSH 준비·임시 테스트 키의 동일 기기 Tailscale 주소 SSH 인증을 확인한 뒤 로그아웃·미사용 키 정리.
 - 서버 러너 합격은 Windows 10/11 x64 클라이언트 실기 검증을 대체하지 않습니다. UAC의 표준 사용자 경로, 재부팅 후 동작, 실제 ECDSA-SK 하드웨어 서명은 별도 검증이 필요합니다.
 - 실제 연결 E2E는 WIF 설정 후 수동 실행합니다. 실행 기록이 없는 항목은 검증 완료로 간주하지 마세요.
 
