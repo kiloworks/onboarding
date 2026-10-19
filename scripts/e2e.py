@@ -47,6 +47,9 @@ def main():
         state = json.loads(subprocess.check_output([ts, 'status', '--json'], text=True))
         assert state['BackendState'] == 'Running'
         assert 'tag:gha-smoke-test-node' in state['Self']['Tags']
+        subprocess.run(['pwsh', '-NoProfile', '-File', 'scripts/drive-ui.ps1', '-Connected'], check=True, timeout=120)
+        after = json.loads(subprocess.check_output([ts, 'status', '--json'], text=True))
+        assert after['BackendState'] == 'Running' and after['Self']['ID'] == state['Self']['ID']
         subprocess.run(['pwsh', '-NoProfile', '-File', 'scripts/check-ssh.ps1'], check=True, timeout=120)
         print('Packaged Rust GPUI → WIF one-off key → Tailscale + SSH: PASS')
     finally:

@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 
 out = Path('dist/licenses')
+if out.exists():
+    shutil.rmtree(out)
 out.mkdir(parents=True, exist_ok=True)
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version', '1']))
 index = {}

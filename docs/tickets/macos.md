@@ -4,12 +4,12 @@
 
 ## 목표
 
-GPUIX 데스크톱 앱에서 전달받은 Tailscale 등록 키를 입력받고 Tailscale 연결 및 기본 관리자 공개키 두 개를 통한 SSH 원격 관리 준비를 완료한다.
+Rust GPUI 데스크톱 앱에서 전달받은 Tailscale 등록 키를 입력받고 Tailscale 연결 및 기본 관리자 공개키 두 개를 통한 SSH 원격 관리 준비를 완료한다.
 
 ## 작업
 
 - 기존 tailscale-onboarding의 macOS 패키징·설치 흐름을 확인하고 재사용 가능한 부분을 이식한다.
-- 지원 macOS 버전·CPU 아키텍처를 결정하고 GPUIX 패키징을 검증한다.
+- 지원 macOS 버전·CPU 아키텍처를 결정하고 Rust GPUI 패키징을 검증한다.
 - 관리자 권한, VPN/네트워크 확장 승인, Remote Login 활성화와 SSH 대상 로컬 계정 정책을 설계한다.
 - 기존 SSH 설정과 공개키를 보존하며 기본 공개키 두 개를 등록한다.
 - 설치 파일 서명·공증 정책을 정하고 실제 설치·재실행·보안키 SSH 접속을 검증한다.

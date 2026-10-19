@@ -12,7 +12,7 @@ v0.1.0 릴리스 설치 파일을 압축 해제해 측정한 기준값입니다.
 
 payload는 실제 NTFS 할당 용량과 같지 않으며, 별도로 설치하는 Tailscale·OpenSSH의 용량을 포함하지 않습니다.
 
-실행 파일에는 Bun·JavaScriptCore가 포함됩니다. 앱 코드를 minify해도 런타임 대부분은 남습니다. GPUIX는 Chromium이나 WebView를 포함하지 않지만, JS 런타임과 네이티브 렌더러는 필요합니다. Hermes로의 변경은 Windows의 프로세스·네트워크·파일 API 호환성을 별도로 검증해야 하므로 이번 변경에 포함하지 않습니다.
+v0.1.x 실행 파일에는 Bun·JavaScriptCore가 포함됩니다. 앱 코드를 minify해도 런타임 대부분은 남습니다. GPUIX는 Chromium이나 WebView를 포함하지 않지만, JS 런타임과 네이티브 렌더러는 필요합니다. Hermes upstream은 Windows를 지원하지 않으므로 v0.2.0에서는 Rust GPUI 직접 링크를 선택했습니다.
 
 v0.1.1부터 동일한 라이선스 원문을 바이트 단위로 중복 제거하고 구성요소 참조를 색인에 보존합니다. 기존 1,139개 원문 전체의 참조 결과가 이전 원문과 동일한지 확인했으며, 라이선스 자체는 약 1.2 MiB로 줄어듭니다. Pretendard는 전체 가변 폰트 대신 원본 Regular·SemiBold 두 파일 약 3 MiB를 포함합니다.
 

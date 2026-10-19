@@ -1,4 +1,4 @@
-param([switch]$E2E)
+param([switch]$E2E, [switch]$Connected)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 Add-Type @'
@@ -36,7 +36,7 @@ function Click([string]$Id) {
   Start-Sleep -Milliseconds 200
 }
 function Capture([string]$Name) {
-  if ($E2E) { return }
+  if ($E2E -or $Connected) { return }
   [void][NativeInput]::SetForegroundWindow($p.MainWindowHandle)
   Start-Sleep -Milliseconds 300
   $root = [Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
@@ -55,25 +55,38 @@ try {
   [void](Find 'begin' 60)
   Capture 'welcome'
   Click 'begin'
+  if ($Connected) {
+    [void](Find 'replace')
+    Click 'next'
+    [void](Find 'start')
+    Click 'back'
+    Click 'replace'
+  }
   if (!$E2E) {
     Click 'next'
     if ((Find 'status').Current.Name -notmatch '키') { throw 'Invalid key did not block progression' }
   }
-  $input = Find 'auth-key'
+  $keyField = Find 'auth-key'
   [void][NativeInput]::SetForegroundWindow($p.MainWindowHandle)
-  $input.SetFocus()
+  $keyField.SetFocus()
   [NativeInput]::Text($key)
+  Start-Sleep -Milliseconds 300
   $key = $null
   Click 'next'
-  [void](Find 'start')
+  $startButton = Find 'start'
+  $windowBounds = ([Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)).Current.BoundingRectangle
+  if ($startButton.Current.IsOffscreen -or $startButton.Current.BoundingRectangle.Bottom -gt $windowBounds.Bottom) { throw 'Final consent button is outside the window' }
   if ((Find 'heading').Current.Name -notmatch '시작 전에') { throw 'Missing explicit final review' }
   Capture 'review'
   if (!$E2E) { Write-Host 'Native UI input, validation and final consent: PASS'; return }
   Click 'start'
   $deadline = [DateTime]::UtcNow.AddMinutes(30)
+  $lastProgress = ''
   do {
     $heading = (Find 'heading').Current.Name
     if ($heading -match '준비가 됐어요') { Write-Host 'Native packaged GUI onboarding: PASS'; return }
+    $progress = (Find 'status').Current.Name -replace 'tskey-[A-Za-z0-9_-]+', '[secret removed]' -replace 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '[token removed]'
+    if ($progress -ne $lastProgress) { Write-Host "Onboarding progress: $progress"; $lastProgress = $progress }
     if ($heading -match '멈췄어요') { throw 'Onboarding failed; inspect the sanitized install log' }
     Start-Sleep -Seconds 2
   } while ([DateTime]::UtcNow -lt $deadline)

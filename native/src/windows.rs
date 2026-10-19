@@ -150,10 +150,10 @@ pub fn onboard(
             Ok((stream, _)) => {
                 stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                 let mut r = BufReader::new(stream);
-                if let Ok(received) = line(&mut r) {
-                    if received.as_bytes().ct_eq(nonce.as_bytes()).into() {
-                        break r;
-                    }
+                if let Ok(received) = line(&mut r)
+                    && bool::from(received.as_bytes().ct_eq(nonce.as_bytes()))
+                {
+                    break r;
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -236,6 +236,25 @@ mod tests {
         assert!(line(&mut BufReader::new(&huge[..])).is_err());
         assert_eq!(quote("a'b"), "a''b");
         assert!(!encode("hello").contains("hello"));
-        assert_eq!(KEYS.lines().filter(|s| !s.is_empty()).count(), 2);
+        let fingerprints = KEYS
+            .lines()
+            .filter(|s| !s.is_empty())
+            .map(|line| {
+                let wire = STANDARD
+                    .decode(line.split_whitespace().nth(1).unwrap())
+                    .unwrap();
+                STANDARD
+                    .encode(Sha256::digest(wire))
+                    .trim_end_matches('=')
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            fingerprints,
+            [
+                "xJz4ingyAdr5ae5kUMW2vXijOFPNjoprtIc6WjKBp6o",
+                "MUbEkhuXvLrdnLLyuSjCWgQRZ/GEwun2TB5V5R53oK0"
+            ]
+        );
     }
 }

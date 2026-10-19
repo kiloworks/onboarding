@@ -60,7 +60,6 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("tab", TabNext, Some("Wizard")),
         KeyBinding::new("shift-tab", TabPrevious, Some("Wizard")),
-        KeyBinding::new("enter", Advance, Some("Wizard")),
         KeyBinding::new("escape", Back, Some("Wizard")),
         KeyBinding::new("alt-n", ToggleConnection, Some("Wizard")),
         KeyBinding::new("alt-m", ToggleMotion, Some("Wizard")),
@@ -164,12 +163,12 @@ impl Wizard {
                 }
             }
             Page::Key => {
-                if self.needs_key() {
-                    if let Err(e) = core::validate_key(self.input.read(cx).value()) {
-                        self.message = e.to_string();
-                        cx.notify();
-                        return;
-                    }
+                if self.needs_key()
+                    && let Err(e) = core::validate_key(self.input.read(cx).value())
+                {
+                    self.message = e.to_string();
+                    cx.notify();
+                    return;
                 }
                 self.page = Page::Review;
                 self.message = "설정할 내용을 확인해 주세요.".into();
@@ -259,7 +258,7 @@ impl Wizard {
         cx.notify();
     }
     fn refresh(&mut self, _: &Refresh, _: &mut Window, cx: &mut Context<Self>) {
-        if self.phase != Phase::Working {
+        if matches!(self.phase, Phase::Done | Phase::Error) {
             self.inspect(cx);
             cx.notify();
         }
@@ -294,7 +293,7 @@ impl Wizard {
             .focus_visible(|s| s.border_color(rgb(0x60a5fa)).border_2())
             .hover(|s| s.opacity(0.85))
             .on_key_down(cx.listener(move |_, event: &KeyDownEvent, window, cx| {
-                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                if !event.is_held && matches!(event.keystroke.key.as_str(), "enter" | "space") {
                     window.dispatch_action(keyboard_action.boxed_clone(), cx);
                     cx.stop_propagation();
                 }
@@ -322,7 +321,7 @@ impl Render for Wizard {
         let mut body = div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_3()
             .flex_1()
             .child(
                 div()
@@ -542,6 +541,13 @@ impl Render for Wizard {
             .role(Role::Application)
             .aria_label("Kiloworks Onboarding")
             .key_context("Wizard")
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                // Holding Enter must not advance through review into elevation.
+                if !event.is_held && event.keystroke.key == "enter" {
+                    this.advance(&Advance, window, cx);
+                    cx.stop_propagation();
+                }
+            }))
             .track_focus(&self.focus)
             .on_action(cx.listener(|_, _: &TabNext, w, cx| w.focus_next(cx)))
             .on_action(cx.listener(|_, _: &TabPrevious, w, cx| w.focus_prev(cx)))
@@ -609,8 +615,8 @@ fn panel() -> Div {
     div()
         .flex()
         .flex_col()
-        .gap_3()
-        .p_5()
+        .gap_2()
+        .p_4()
         .bg(rgb(0xf6f8fb))
         .rounded_lg()
 }

@@ -9,6 +9,9 @@ use gpui_platform::application;
 use std::{borrow::Cow, time::Duration};
 
 fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("{}", core::redact(&info.to_string()))
+    }));
     application().run(|cx: &mut App| {
         cx.text_system()
             .add_fonts(vec![
@@ -46,7 +49,7 @@ fn main() {
         if std::env::args().any(|a| a == "--smoke-gui") {
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(Duration::from_secs(5)).await;
-                let _ = cx.update(|cx| cx.quit());
+                cx.update(|cx| cx.quit());
             })
             .detach();
         }
