@@ -71,8 +71,11 @@ jobs:
             licenseBytes = (Get-ChildItem dist/licenses -Recurse -File | Measure-Object Length -Sum).Sum
           }
           $report | ConvertTo-Json | Tee-Object -FilePath artifacts/size.json
-          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          if (!(Test-Path $nsis)) { choco install nsis --yes --no-progress; if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' } }
+          $archive = Join-Path $env:RUNNER_TEMP 'nsis-3.13.zip'
+          Invoke-WebRequest -Uri 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip' -OutFile $archive -MaximumRetryCount 2
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne 'BA63DFFC4410EE89193E1CB5A41989991BD77C61068DA17E3156D136B7B0B3D8') { throw 'NSIS archive hash mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP -Force
+          $nsis = Join-Path $env:RUNNER_TEMP 'nsis-3.13\makensis.exe'
           & $nsis /DARCH=${{ matrix.arch }} packaging/onboarding.nsi
           if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
           Get-ChildItem dist/*-setup.exe | ForEach-Object {
