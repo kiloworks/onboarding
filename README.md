@@ -14,7 +14,7 @@ Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비
 
 ## Code signing policy — 코드 서명 정책
 
-SignPath Foundation 무료 OSS 서명을 신청하기 위해 준비 중이며, 아직 승인되거나 서명된 릴리스는 없습니다. 현재 v0.2.0 x64 설치파일은 Defender의 `Trojan:Win32/Wacatac.B!ml` 탐지 보고가 있어 분석 요청을 준비하고 있습니다. 서명 도입을 탐지 해제의 보장으로 취급하지 않습니다. [서명 계획과 승인 역할](docs/code-signing.md), [개인정보 안내](docs/privacy.md)를 참고하세요.
+2026-10-19 SignPath Foundation 무료 OSS 서명 신청서를 제출했으며, 아직 승인되거나 서명된 릴리스는 없습니다. 현재 v0.2.0 x64 설치파일은 Defender의 `Trojan:Win32/Wacatac.B!ml` 탐지 보고가 있어 분석 요청을 준비하고 있습니다. 서명 도입을 탐지 해제의 보장으로 취급하지 않습니다. [서명 계획과 승인 역할](docs/code-signing.md), [개인정보 안내](docs/privacy.md)를 참고하세요.
 
 ## 기기에 적용하는 변경
 
