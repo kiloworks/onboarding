@@ -1,0 +1,67 @@
+name: Windows OIDC E2E
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'Successful Windows CI run ID for this exact main commit'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  e2e:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2022, windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate build provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          if ($env:BUILD_RUN_ID -notmatch '^\d+$') { throw 'Invalid build run ID' }
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $run.head_sha -ne $env:GITHUB_SHA -or $run.conclusion -ne 'success' -or $run.path -ne '.github/workflows/ci.yml') { throw 'Build must be a successful Windows CI run of this exact commit' }
+          if (!$env:TS_WIF_CLIENT_ID -or !$env:TS_WIF_AUDIENCE) { throw 'Set TS_WIF_CLIENT_ID and TS_WIF_AUDIENCE repository variables' }
+        # Values are identifiers, not long-lived credentials.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: onboarding-${{ matrix.runner }}
+          path: downloaded
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Install tested package
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem downloaded -Recurse -Filter '*-setup.exe' | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'Onboarding-E2E'
+          $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$dir") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'App installation failed' }
+          "ONBOARDING_EXE=$dir\onboarding.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run real application onboarding with WIF
+        run: bun scripts/e2e.ts
+      - name: Cleanup even after failed setup
+        if: always()
+        shell: pwsh
+        run: |
+          $ts = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+          if (Test-Path $ts) { & $ts logout; if ($LASTEXITCODE -ne 0) { throw 'Verify ephemeral node cleanup in Tailscale console' } }
+    env:
+      TS_WIF_CLIENT_ID: ${{ vars.TS_WIF_CLIENT_ID }}
+      TS_WIF_AUDIENCE: ${{ vars.TS_WIF_AUDIENCE }}
