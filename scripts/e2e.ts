@@ -45,7 +45,15 @@ try {
   await app.getByTestId('auth-key').fill(auth.key);
   auth.key = '';
   await app.getByTestId('start').click();
-  await app.getByTestId('copy-report').waitFor({ timeoutMs: 30 * 60_000 });
+  let lastProgress = '';
+  const progress = setInterval(() => {
+    void app!.getByTestId('status').textContent().then(value => {
+      const safe = redact(value);
+      if (safe !== lastProgress) { lastProgress = safe; console.log(`Onboarding progress: ${safe}`); }
+    }).catch(() => {});
+  }, 15_000);
+  try { await app.getByTestId('copy-report').waitFor({ timeoutMs: 30 * 60_000 }); }
+  finally { clearInterval(progress); }
   const heading = await app.getByTestId('heading').textContent();
   const detail = await app.getByTestId('status').textContent();
   assert.ok(heading.includes('준비가 됐어요'), `Onboarding did not complete: ${redact(detail)}`);
