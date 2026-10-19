@@ -69,6 +69,10 @@ try {
   $keyField = Find 'auth-key'
   [void][NativeInput]::SetForegroundWindow($p.MainWindowHandle)
   $keyField.SetFocus()
+  $focusDeadline = [DateTime]::UtcNow.AddSeconds(3)
+  while (!$keyField.Current.HasKeyboardFocus -and [DateTime]::UtcNow -lt $focusDeadline) { Start-Sleep -Milliseconds 100 }
+  if (!$keyField.Current.HasKeyboardFocus) { throw 'Native key field did not receive keyboard focus' }
+  Start-Sleep -Milliseconds 200
   [NativeInput]::Text($key)
   Start-Sleep -Milliseconds 300
   $key = $null
