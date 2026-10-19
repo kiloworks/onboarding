@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $client = New-Object Net.Sockets.TcpClient
 $client.Connect('127.0.0.1', $Port)
 $stream = $client.GetStream()
@@ -60,8 +61,7 @@ function Update-Tailscale {
   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'amd64' }
   $name = [string]$meta.MSIs.$arch
   if ($name -notmatch '^tailscale-setup-[0-9.]+-(amd64|arm64)\.msi$') { throw 'invalid installer name' }
-  $dir = Join-Path $env:ProgramData ('Kiloworks\Onboarding\' + [Guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $dir = Join-Path $env:ProgramData ('Onboarding-install-' + [Guid]::NewGuid().ToString('N'))
   # Only Administrators and SYSTEM may replace an installer that will run elevated.
   $acl = New-Object Security.AccessControl.DirectorySecurity
   $acl.SetAccessRuleProtection($true, $false)
@@ -69,7 +69,7 @@ function Update-Tailscale {
     $rule = New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     $acl.AddAccessRule($rule)
   }
-  Set-Acl -Path $dir -AclObject $acl
+  [void][IO.Directory]::CreateDirectory($dir, $acl)
   try {
     $msi = Join-Path $dir 'tailscale.msi'
     Send '공식 Tailscale 설치 파일을 내려받고 서명을 확인합니다.'
@@ -157,6 +157,8 @@ function Install-SSH {
   Set-Acl $authFile $acl
   $sshd = Join-Path $env:WINDIR 'System32\OpenSSH\sshd.exe'
   if (!(Test-Path $sshd)) { throw 'OpenSSH Server is missing' }
+  $keygen = Join-Path (Split-Path $sshd) 'ssh-keygen.exe'
+  [void](Run-Process $keygen @('-A'))
   # Refuse an incompatible/existing sshd configuration instead of rewriting its policy.
   [void](Run-Process $sshd @('-t'))
   $effective = Run-Process $sshd @('-T', '-C', ('user=' + $local.Name + ',host=localhost,addr=127.0.0.1'))
