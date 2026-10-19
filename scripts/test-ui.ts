@@ -22,6 +22,11 @@ const services: Services = {
   async copyReport(value) { copied = value; },
 };
 const root = createTestRoot({ width: 1000, height: 720 });
+if (process.platform === 'win32') {
+  // The 0.10.0 test wrapper predates the font API in our source-built renderer.
+  const native = (root.renderer as unknown as { native: { registerFont(data: Buffer): void } }).native;
+  Object.assign(root.renderer, { registerFont: native.registerFont.bind(native) });
+}
 const pump = setInterval(() => root.renderer.flush(), 16);
 try {
   root.render(createElement(AppFonts, { children: createElement(App, { services }) }));
