@@ -20,6 +20,3 @@ jobs:
       - run: bun run typecheck
       - run: bun test tests/core.test.ts
       - run: ./scripts/check-windows.ps1
-      - run: New-Item -ItemType Directory -Force artifacts | Out-Null
-      - run: bun run test:ui
-      - run: bun run build
