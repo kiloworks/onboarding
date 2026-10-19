@@ -91,6 +91,9 @@ try {
     Start-Sleep -Seconds 2
   } while ([DateTime]::UtcNow -lt $deadline)
   throw 'Onboarding E2E timed out'
+} catch {
+  if (!$E2E -and !$Connected -and !$p.HasExited -and $p.MainWindowHandle -ne 0) { Capture 'failure' }
+  throw
 } finally {
   $key = $null
   if (!$p.HasExited) { $p.CloseMainWindow() | Out-Null; if (!$p.WaitForExit(10000)) { $p.Kill() } }
