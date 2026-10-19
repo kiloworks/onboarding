@@ -21,11 +21,11 @@ fn main() {
             .expect("Pretendard 폰트를 불러올 수 없습니다.");
         input::bind_keys(cx);
         wizard::bind_keys(cx);
-        let bounds = Bounds::centered(None, size(px(1000.), px(720.)), cx);
+        let bounds = Bounds::centered(None, size(px(1000.), px(680.)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(860.), px(720.))),
+                window_min_size: Some(size(px(860.), px(680.))),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some("Kiloworks Onboarding".into()),
                     ..Default::default()

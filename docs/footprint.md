@@ -23,3 +23,14 @@ CI artifact의 `artifacts/size.json`에 빌드별 payload·실행 파일·render
 Bun·JavaScriptCore·React와 별도 `.node` 렌더러를 제거하고 GPUI를 Rust 실행파일에 직접 링크합니다. GPUI 소스 revision은 이전 바인딩과 동일합니다. 배포 패키지에는 앱과 MSVC CRT·라이선스만 포함합니다. 실제 수치는 새 Windows CI의 size.json과 릴리스 설치파일로 측정합니다.
 
 v0.1.1 기준 x64는 실행파일 95.35 MiB, renderer 21.97 MiB, payload 120.29 MiB, 설치파일 약 41.3 MiB입니다. ARM64는 실행파일 82.83 MiB, renderer 19.44 MiB, payload 107.60 MiB, 설치파일 약 35.9 MiB입니다.
+
+첫 Rust GPUI Windows CI 후보(39210249718)의 실측값입니다. 최종 릴리스 값은 해당 빌드의 size.json을 따릅니다.
+
+| 구성 | x64 | ARM64 |
+| --- | ---: | ---: |
+| 설치파일 | 약 3.9 MiB | 약 3.9 MiB |
+| 앱 payload | 약 12.2 MiB | 약 14.0 MiB |
+| Rust 실행파일 (Pretendard 포함) | 약 9.1 MiB | 약 8.7 MiB |
+| 별도 JS 런타임·renderer sidecar | 없음 | 없음 |
+
+별도로 설치되는 Tailscale·OpenSSH의 용량은 이 비교에 포함하지 않습니다.
