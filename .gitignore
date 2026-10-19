@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vendor/
+artifacts/
+.env
+.env.*
+*.log
+# Keyport's earlier local handoff is unrelated to this public desktop app.
+HANDOFF.md
