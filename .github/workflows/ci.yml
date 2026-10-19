@@ -110,6 +110,7 @@ jobs:
           name: native-${{ matrix.arch }}
           path: candidate
       - run: ./scripts/check-windows.ps1
+      - run: ./scripts/prepare-desktop.ps1
       - name: Install, upgrade and exercise native wizard
         shell: pwsh
         run: |

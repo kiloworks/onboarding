@@ -42,6 +42,7 @@ jobs:
           path: downloaded
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ github.token }}
+      - run: ./scripts/prepare-desktop.ps1
       - name: Install tested package
         shell: pwsh
         run: |
