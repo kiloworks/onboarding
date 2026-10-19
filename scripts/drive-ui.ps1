@@ -110,7 +110,12 @@ try {
   $lastProgress = ''
   do {
     $heading = (Find 'heading').Current.Name
-    if ($heading -match '준비가 됐어요') { Write-Host 'Native packaged GUI onboarding: PASS'; return }
+    if ($heading -match '준비가 됐어요') {
+      $summary = (Find 'report').Current.Name
+      if ([string]::IsNullOrWhiteSpace($summary) -or $summary -match 'tskey-[A-Za-z0-9_-]+') { throw 'Missing or unsafe accessible completion report' }
+      Write-Host 'Native packaged GUI onboarding: PASS'
+      return
+    }
     $progress = (Find 'status').Current.Name -replace 'tskey-[A-Za-z0-9_-]+', '[secret removed]' -replace 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '[token removed]'
     if ($progress -ne $lastProgress) { Write-Host "Onboarding progress: $progress"; $lastProgress = $progress }
     if ($heading -match '멈췄어요') { throw 'Onboarding failed; inspect the sanitized install log' }

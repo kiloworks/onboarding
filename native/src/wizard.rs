@@ -433,7 +433,7 @@ impl Render for Wizard {
                         .child(
                             div()
                                 .id("ssh-scope").accessibility_id("ssh-scope")
-                                .role(Role::Label).aria_label(SCOPE)
+                                .role(Role::Label).aria_value(SCOPE)
                                 .bg(rgb(0xfff7ed))
                                 .text_color(rgb(0x8b4b18))
                                 .p_4()
@@ -516,7 +516,7 @@ impl Render for Wizard {
                         .id("report")
                         .accessibility_id("report")
                         .role(Role::Label)
-                        .aria_label(event.report.clone())
+                        .aria_value(event.report.clone())
                         .max_h(px(160.))
                         .overflow_y_scroll()
                         .text_size(px(13.))
