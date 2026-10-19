@@ -148,6 +148,8 @@ pub fn onboard(
         }
         match listener.accept() {
             Ok((stream, _)) => {
+                // Accepted sockets can inherit the listener's nonblocking mode on Windows.
+                stream.set_nonblocking(false)?;
                 stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                 let mut r = BufReader::new(stream);
                 if let Ok(received) = line(&mut r)
