@@ -150,13 +150,8 @@ function Upgrade-OpenSSH {
   } finally { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
 }
 function Install-SSH {
-  Send 'Windows OpenSSH 서버를 준비합니다. Windows 기능 설치는 몇 분이 걸릴 수 있습니다.'
-  $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1
-  if (!$cap) { throw 'OpenSSH Server capability is unavailable' }
-  if ($cap.State -ne 'Installed') {
-    $result = Add-WindowsCapability -Online -Name $cap.Name
-    if ($result.RestartNeeded) { $script:reboot = $true }
-  }
+  Send 'Windows OpenSSH 서버를 준비합니다.'
+  if (!(Get-Service sshd -ErrorAction SilentlyContinue)) { Upgrade-OpenSSH }
   $userSid = New-Object Security.Principal.SecurityIdentifier([string]$config.sid)
   $account = $userSid.Translate([Security.Principal.NTAccount]).Value
   $local = Get-LocalUser -SID $userSid

@@ -20,4 +20,11 @@ if (!$out) { throw 'Process output capture failed' }
 $source = Get-Content src\windows.ps1 -Raw
 if ($source -notmatch 'auth-key=file:') { throw 'Missing auth-key named pipe' }
 if ($source -match 'auth-key=\$') { throw 'Auth key must not be in process arguments' }
-Write-Host 'PowerShell syntax, one-retry policy and process boundary: PASS'
+# A missing server must use the signed MSI route without entering Windows Update servicing.
+$script:installs = 0
+function Get-Service { param($Name, $ErrorAction) return $null }
+function Upgrade-OpenSSH { $script:installs++; throw 'test-install-boundary' }
+try { Install-SSH; throw 'Missing server skipped installation' }
+catch { if ($_.Exception.Message -ne 'test-install-boundary') { throw } }
+if ($script:installs -ne 1) { throw 'Missing server must install the official package once' }
+Write-Host 'PowerShell syntax, retry, process boundary and missing SSH server routing: PASS'
