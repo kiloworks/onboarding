@@ -116,6 +116,35 @@ function Connect-Tailscale {
   if (!$s -or $s.BackendState -ne 'Running') { throw 'Tailscale is not connected' }
   $script:key = ''
 }
+function SSH-ServerPath {
+  foreach ($candidate in @((Join-Path $env:ProgramFiles 'OpenSSH/sshd.exe'), (Join-Path $env:WINDIR 'System32/OpenSSH/sshd.exe'))) {
+    if (Test-Path $candidate) { return $candidate }
+  }
+  throw 'OpenSSH Server is missing'
+}
+function Upgrade-OpenSSH {
+  Send '기본 보안키를 지원하는 Microsoft OpenSSH 서버로 업데이트합니다.'
+  $release = Invoke-RestMethod 'https://api.github.com/repos/PowerShell/Win32-OpenSSH/releases/latest' -Headers @{ 'User-Agent' = 'kiloworks-onboarding' } -TimeoutSec 60
+  $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'ARM64' } else { 'Win64' }
+  $asset = @($release.assets | Where-Object { $_.name -match ('^OpenSSH-' + $arch + '-v[0-9.]+\.msi$') }) | Select-Object -First 1
+  if (!$asset -or $asset.browser_download_url -notmatch '^https://github\.com/PowerShell/Win32-OpenSSH/releases/download/') { throw 'official OpenSSH package is unavailable' }
+  $dir = Join-Path $env:ProgramData ('Onboarding-ssh-' + [Guid]::NewGuid().ToString('N'))
+  $acl = New-Object Security.AccessControl.DirectorySecurity
+  $acl.SetAccessRuleProtection($true, $false)
+  foreach ($sid in @('S-1-5-32-544', 'S-1-5-18')) {
+    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+  }
+  [void][IO.Directory]::CreateDirectory($dir, $acl)
+  try {
+    $msi = Join-Path $dir 'openssh.msi'
+    Invoke-WebRequest $asset.browser_download_url -OutFile $msi -UseBasicParsing -TimeoutSec 300
+    $signature = Get-AuthenticodeSignature $msi
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation[, ]') { throw 'Microsoft OpenSSH installer signature verification failed' }
+    $p = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi + '"'), 'ADDLOCAL=Server', '/qn', '/norestart') -Wait -PassThru
+    if ($p.ExitCode -eq 3010) { $script:reboot = $true }
+    elseif ($p.ExitCode -ne 0) { throw "OpenSSH MSI exit $($p.ExitCode)" }
+  } finally { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
+}
 function Install-SSH {
   Send 'Windows OpenSSH 서버를 준비합니다. Windows 기능 설치는 몇 분이 걸릴 수 있습니다.'
   $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1
@@ -155,14 +184,20 @@ function Install-SSH {
   if (!$isAdmin) { $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($userSid, 'FullControl', 'Allow'))); $acl.SetOwner($userSid) }
   else { $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544'))) }
   Set-Acl $authFile $acl
-  $sshd = Join-Path $env:WINDIR 'System32\OpenSSH\sshd.exe'
-  if (!(Test-Path $sshd)) { throw 'OpenSSH Server is missing' }
+  $sshd = SSH-ServerPath
   $keygen = Join-Path (Split-Path $sshd) 'ssh-keygen.exe'
   [void](Run-Process $keygen @('-A'))
   # Refuse an incompatible/existing sshd configuration instead of rewriting its policy.
   [void](Run-Process $sshd @('-t'))
   $effective = Run-Process $sshd @('-T', '-C', ('user=' + $local.Name + ',host=localhost,addr=127.0.0.1'))
-  if ($effective -notmatch 'pubkeyaccepted(algorithms|keytypes) .*sk-ecdsa-sha2-nistp256@openssh.com') { throw 'OpenSSH does not accept the required security-key algorithm; update OpenSSH before retrying' }
+  if ($effective -notmatch 'pubkeyaccepted(algorithms|keytypes) .*sk-ecdsa-sha2-nistp256@openssh.com') {
+    Upgrade-OpenSSH
+    $sshd = SSH-ServerPath
+    [void](Run-Process (Join-Path (Split-Path $sshd) 'ssh-keygen.exe') @('-A'))
+    [void](Run-Process $sshd @('-t'))
+    $effective = Run-Process $sshd @('-T', '-C', ('user=' + $local.Name + ',host=localhost,addr=127.0.0.1'))
+    if ($effective -notmatch 'pubkeyaccepted(algorithms|keytypes) .*sk-ecdsa-sha2-nistp256@openssh.com') { throw 'OpenSSH does not accept the required security-key algorithm' }
+  }
   $expectedFile = if ($isAdmin) { '__PROGRAMDATA__/ssh/administrators_authorized_keys' } else { '.ssh/authorized_keys' }
   if ($effective -notmatch ('(?im)^authorizedkeysfile .*' + [regex]::Escape($expectedFile))) { throw 'existing SSH AuthorizedKeysFile differs from the supported path' }
   Send '기본 공개키 두 개와 SSH 서비스를 설정합니다. 모든 네트워크에서 TCP 22번을 허용합니다.'

@@ -17,7 +17,7 @@ Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비
 - 공식 안정 채널을 조회하고 Tailscale이 없으면 설치, 구버전이면 업데이트합니다. 최신이면 다운로드를 생략합니다. 설치 MSI의 Authenticode 서명을 검증합니다.
 - 기존 tailnet 연결은 화면에 표시합니다. 사용자가 로그아웃·새 연결을 선택한 경우에만 업데이트 후 기존 계정을 로그아웃합니다. 현재 연결을 유지하며 SSH 설정만 복구할 수도 있습니다.
 - Tailscale을 unattended 모드로 연결하고 경로 수신을 끕니다.
-- Windows OpenSSH Server를 설치하고 자동 시작합니다.
+- Windows OpenSSH Server를 설치하고 자동 시작합니다. 기본 보안키를 지원하지 않는 구버전은 Microsoft의 공식 GitHub MSI 배포로 업그레이드하며 Microsoft 서명을 검증합니다. 현재 upstream MSI 채널은 Preview 이름을 사용할 수 있습니다.
 - [기본 공개키 두 개](config/administrators_authorized_keys)를 기존 키를 보존하며 등록합니다. 관리자 계정은 공통 관리자 키 파일, 일반 로컬 계정은 해당 사용자 프로필의 키 파일을 사용합니다.
 - **모든 네트워크 프로필에서 TCP 22번 인바운드를 허용합니다.** Tailscale 인터페이스 전용 규칙이 아닙니다. 네트워크에서 PC에 도달할 수 있는 다른 장비도 SSH 연결을 시도할 수 있습니다.
 - 기존 SSH 인증 정책은 임의로 변경하지 않습니다. 호환되지 않는 기존 설정·보안키 알고리즘은 실패 리포트로 알립니다.
