@@ -13,13 +13,14 @@ public class NativeInput {
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
  [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+ public static void Click(int x, int y) {
+   SetCursorPos(x,y);
+   var a = new INPUT[2]; a[0].u.mi.flags=2; a[1].u.mi.flags=4;
+   if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Mouse input failed");
+ }
  public static void Activate(IntPtr hwnd, int x, int y) {
    SetForegroundWindow(hwnd);
-   if (GetForegroundWindow() != hwnd) {
-     SetCursorPos(x,y);
-     var a = new INPUT[2]; a[0].u.mi.flags=2; a[1].u.mi.flags=4;
-     if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Window activation failed");
-   }
+   if (GetForegroundWindow() != hwnd) Click(x,y);
  }
  public static void Text(string s) { foreach(char c in s) { var a = new INPUT[2]; a[0].type=a[1].type=1; a[0].u.ki.scan=a[1].u.ki.scan=c; a[0].u.ki.flags=4; a[1].u.ki.flags=6; if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Text input failed"); } }
 }
@@ -83,11 +84,9 @@ try {
   }
   $keyField = Find 'auth-key'
   [void][NativeInput]::SetForegroundWindow($p.MainWindowHandle)
-  $keyField.SetFocus()
-  $focusDeadline = [DateTime]::UtcNow.AddSeconds(3)
-  while (!$keyField.Current.HasKeyboardFocus -and [DateTime]::UtcNow -lt $focusDeadline) { Start-Sleep -Milliseconds 100 }
-  if (!$keyField.Current.HasKeyboardFocus) { throw 'Native key field did not receive keyboard focus' }
-  Start-Sleep -Milliseconds 200
+  $fieldBounds = $keyField.Current.BoundingRectangle
+  [NativeInput]::Click([int]($fieldBounds.Left + $fieldBounds.Width / 2), [int]($fieldBounds.Top + $fieldBounds.Height / 2))
+  Start-Sleep -Milliseconds 300
   [NativeInput]::Text($key)
   Start-Sleep -Milliseconds 300
   $key = $null
