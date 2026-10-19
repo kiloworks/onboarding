@@ -57,6 +57,6 @@ try {
     }
     $prefix += '$ParentId=' + $ParentId + ';'
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($prefix + $helper))
-    $process = Start-Process "$PSHOME\powershell.exe" -ArgumentList @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) -PassThru
+    $process = Start-Process "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) -PassThru
     if ($process.HasExited) { throw '업데이트 설치 도우미를 시작할 수 없습니다.' }
 } else { throw 'Unknown update mode' }
