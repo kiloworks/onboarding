@@ -7,3 +7,7 @@ artifacts/
 *.log
 # Keyport's earlier local handoff is unrelated to this public desktop app.
 HANDOFF.md
+
+/target/
+
+__pycache__/

@@ -5,7 +5,7 @@ Unicode True
 !define ARCH "x64"
 !endif
 Name "Kiloworks Onboarding"
-OutFile "..\dist\onboarding-0.1.1-windows-${ARCH}-setup.exe"
+OutFile "..\dist\onboarding-0.2.0-windows-${ARCH}-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\Kiloworks\Onboarding"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
@@ -28,7 +28,6 @@ FunctionEnd
 Section "Onboarding"
   SetOutPath "$INSTDIR"
   File "..\dist\onboarding.exe"
-  File "..\dist\gpuix-native.node"
   File "..\dist\*.dll"
   File "..\LICENSE"
   File "..\THIRD_PARTY_NOTICES.md"
@@ -37,6 +36,7 @@ Section "Onboarding"
   ${If} $R0 == '"$INSTDIR\Uninstall.exe"'
   ${OrIf} $R0 == '$$"$INSTDIR\Uninstall.exe$$"'
     RMDir /r "$INSTDIR\licenses"
+    Delete "$INSTDIR\gpuix-native.node"
   ${EndIf}
   SetOutPath "$INSTDIR\licenses"
   File /r "..\dist\licenses\*"
@@ -46,7 +46,7 @@ Section "Onboarding"
   CreateShortcut "$SMPROGRAMS\Kiloworks\Onboarding.lnk" "$INSTDIR\onboarding.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "DisplayName" "Kiloworks Onboarding"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "DisplayVersion" "0.1.1"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "DisplayVersion" "0.2.0"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding" "NoRepair" 1
 SectionEnd

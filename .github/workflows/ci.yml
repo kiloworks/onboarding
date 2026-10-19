@@ -11,10 +11,83 @@ concurrency:
   group: windows-ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  arm-binding:
-    uses: ./.github/workflows/native-arm.yml
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            arch: arm64
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+        with:
+          toolchain: 1.98.1
+          target: ${{ matrix.target }}
+          cache: false
+          rustflags: ''
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-gpui-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}-v1
+          restore-keys: rust-gpui-${{ matrix.arch }}-
+      - name: Configure ARM64 Clang
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+          $llvm = Join-Path $vs 'VC\Tools\Llvm\ARM64\bin'
+          if (!(Test-Path "$llvm\clang.exe")) { throw 'ARM64 Clang is missing' }
+          $llvm | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: cargo fmt --check
+      - run: cargo test --locked --release --target ${{ matrix.target }}
+      - run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Package native executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist,artifacts | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/onboarding.exe dist/
+          python scripts/licenses.py
+          if ($LASTEXITCODE -ne 0) { throw 'License collection failed' }
+          ./scripts/copy-crt.ps1 -Arch ${{ matrix.arch }}
+          $report = @{
+            arch = '${{ matrix.arch }}'
+            payloadBytes = (Get-ChildItem dist -Recurse -File | Measure-Object Length -Sum).Sum
+            appBytes = (Get-Item dist/onboarding.exe).Length
+            rendererBytes = 0
+            licenseBytes = (Get-ChildItem dist/licenses -Recurse -File | Measure-Object Length -Sum).Sum
+          }
+          $report | ConvertTo-Json | Tee-Object -FilePath artifacts/size.json
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (!(Test-Path $nsis)) { choco install nsis --yes --no-progress; if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' } }
+          & $nsis /DARCH=${{ matrix.arch }} packaging/onboarding.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
+          Get-ChildItem dist/*-setup.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)" | Set-Content ($_.FullName + '.sha256') -Encoding ascii
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-${{ matrix.arch }}
+          path: |
+            dist/*-setup.exe*
+            artifacts/size.json
+          if-no-files-found: error
+          retention-days: 7
   windows:
-    needs: arm-binding
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -26,87 +99,40 @@ jobs:
           - runner: windows-11-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          bun-version: 1.4.3
-      - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: gpuix-win32-${{ matrix.arch }}
-          path: node_modules/@gpuix/native
-      - run: bun run typecheck
-      - run: bun test tests
+          name: native-${{ matrix.arch }}
+          path: candidate
       - run: ./scripts/check-windows.ps1
-      - run: New-Item -ItemType Directory -Force artifacts | Out-Null
-      - run: bun run test:ui
-      - run: bun run build
-      - run: bun scripts/licenses.ts
-      - run: ./scripts/copy-crt.ps1 -Arch ${{ matrix.arch }}
-      - name: Include native dependency licenses
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: gpuix-native-licenses-${{ matrix.arch }}
-          path: dist/licenses/native
-      - run: bun scripts/dedupe-licenses.ts
-      - name: Report installed payload size
+      - name: Install, upgrade and exercise native wizard
         shell: pwsh
         run: |
-          $report = @{
-            arch = '${{ matrix.arch }}'
-            payloadBytes = (Get-ChildItem dist -Recurse -File | Measure-Object Length -Sum).Sum
-            appBytes = (Get-Item dist/onboarding.exe).Length
-            rendererBytes = (Get-Item dist/gpuix-native.node).Length
-            licenseBytes = (Get-ChildItem dist/licenses -Recurse -File | Measure-Object Length -Sum).Sum
-          }
-          $report | ConvertTo-Json | Tee-Object -FilePath artifacts/size.json
-      - name: Package installer
-        shell: pwsh
-        run: |
-          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          if (!(Test-Path $nsis)) { choco install nsis --yes --no-progress; if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' } }
-          & $nsis /DARCH=${{ matrix.arch }} packaging/onboarding.nsi
-          if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
-      - name: Install and launch packaged application
-        shell: pwsh
-        run: |
-          $installer = Get-Item dist/*-setup.exe
+          $installer = Get-ChildItem candidate -Recurse -Filter '*-setup.exe' | Select-Object -First 1
           $install = Join-Path $env:RUNNER_TEMP 'Onboarding-installed'
           $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$install") -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Installer failed' }
-          if (!(Test-Path "$install\onboarding.exe") -or !(Test-Path "$install\gpuix-native.node")) { throw 'Missing installed app' }
+          if (!(Test-Path "$install\onboarding.exe") -or (Test-Path "$install\gpuix-native.node")) { throw 'Invalid native payload' }
           $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KiloworksOnboarding'
           if ((Get-ItemProperty $registry).UninstallString -ne ('"' + $install + '\Uninstall.exe"')) { throw 'Invalid Windows uninstall command' }
           Set-ItemProperty $registry UninstallString ('$"' + $install + '\Uninstall.exe$"')
           'old generated notice' | Set-Content "$install\licenses\old-generated-notice.txt"
+          'legacy renderer' | Set-Content "$install\gpuix-native.node"
           'preserve user data' | Set-Content "$install\user-data.txt"
           $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$install") -Wait -PassThru
-          if ($p.ExitCode -ne 0 -or (Test-Path "$install\licenses\old-generated-notice.txt")) { throw 'Upgrade did not replace generated notices' }
+          if ($p.ExitCode -ne 0 -or (Test-Path "$install\licenses\old-generated-notice.txt") -or (Test-Path "$install\gpuix-native.node")) { throw 'Upgrade left obsolete runtime files' }
           if (!(Test-Path "$install\user-data.txt") -or !(Test-Path "$install\licenses\LICENSE-INDEX.json")) { throw 'Upgrade lost user data or license index' }
-          $env:GPUIX_BACKGROUND = '1'
-          $p = Start-Process "$install\onboarding.exe" -ArgumentList '--smoke-gui' -PassThru
-          if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Packaged GUI did not finish smoke launch' }
-          if ($p.ExitCode -ne 0) { throw 'Packaged GUI exited with an error' }
+          $env:ONBOARDING_EXE = "$install\onboarding.exe"
+          ./scripts/drive-ui.ps1
           Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait
-      - name: Checksums
-        shell: pwsh
-        run: |
-          Get-ChildItem dist/*-setup.exe | ForEach-Object {
-            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $($_.Name)" | Set-Content ($_.FullName + '.sha256') -Encoding ascii
-          }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: onboarding-${{ matrix.runner }}
-          path: |
-            dist/*-setup.exe
-            dist/*.sha256
-            artifacts/ui-*.png
-            artifacts/size.json
+          path: candidate/
           if-no-files-found: error
           retention-days: 7
   release:
@@ -116,35 +142,29 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: onboarding-*
           path: artifacts
-      - name: Publish unsigned preview installers
+      - name: Publish native preview installers
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir release
-          cp artifacts/onboarding-windows-2025/dist/*-setup.exe* release/
-          cp artifacts/onboarding-windows-11-arm/dist/*-setup.exe* release/
-          cat > notes.txt <<'NOTES'
-          Windows x64·ARM64용 미서명 테스트 릴리스입니다.
-          관리자가 전달한 Tailscale 일회용 키를 첫 실행에 입력합니다.
-          Tailscale 업데이트와 SSH 준비를 수행하며 모든 네트워크의 TCP 22번을 허용합니다.
-          기본 관리자 공개키 두 개가 등록됩니다.
-          Windows Server 2022/2025와 Windows 11 ARM64 CI 결과는 해당 실행을 확인하세요.
-          실제 Windows 10/11 x64, UAC 및 보안키 하드웨어 접속 검증은 별도 필요합니다.
-          OIDC 실제 연결 E2E는 WIF 설정 후 별도 실행해야 합니다. CI 합격을 실제 연결 E2E 합격으로 해석하지 마세요.
-          NOTES
+          find artifacts/onboarding-windows-2025 -name '*-setup.exe*' -exec cp {} release/ \;
+          find artifacts/onboarding-windows-11-arm -name '*-setup.exe*' -exec cp {} release/ \;
           version="${GITHUB_REF_NAME#v}"
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
-          cat > downloads.txt <<TABLE
-          | Windows | 설치 파일 | SHA-256 체크섬 |
+          cat > notes.txt <<NOTES
+          Rust GPUI 네이티브 Windows x64·ARM64 미서명 프리뷰입니다. Bun·React·JavaScript 런타임을 포함하지 않습니다.
+
+          | Windows | 설치 파일 | SHA-256 |
           | --- | --- | --- |
           | x64 | [setup.exe]($base/onboarding-$version-windows-x64-setup.exe) | [.sha256]($base/onboarding-$version-windows-x64-setup.exe.sha256) |
           | ARM64 | [setup.exe]($base/onboarding-$version-windows-arm64-setup.exe) | [.sha256]($base/onboarding-$version-windows-arm64-setup.exe.sha256) |
 
-          TABLE
-          cat notes.txt >> downloads.txt
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --title "Onboarding $GITHUB_REF_NAME — Windows preview" --notes-file downloads.txt release/*
+          Tailscale 최신 버전과 SSH를 준비하고 모든 네트워크의 TCP 22를 허용합니다. 기본 관리자 공개키 두 개를 등록합니다.
+          실제 Windows 10/11 x64와 물리 보안키 원격 접속은 별도 검증이 필요합니다. OIDC 연결 E2E 결과는 해당 실행을 확인하세요.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --title "Onboarding $GITHUB_REF_NAME — Rust GPUI preview" --notes-file notes.txt release/*

@@ -36,10 +36,6 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $run.head_sha -ne $env:GITHUB_SHA -or $run.conclusion -ne 'success' -or $run.path -ne '.github/workflows/ci.yml') { throw 'Build must be a successful Windows CI run of this exact commit' }
           if (!$env:TS_WIF_CLIENT_ID -or !$env:TS_WIF_AUDIENCE) { throw 'Set TS_WIF_CLIENT_ID and TS_WIF_AUDIENCE repository variables' }
         # Values are identifiers, not long-lived credentials.
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.3
-      - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: onboarding-${{ matrix.runner }}
@@ -55,7 +51,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw 'App installation failed' }
           "ONBOARDING_EXE=$dir\onboarding.exe" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Run real application onboarding with WIF
-        run: bun scripts/e2e.ts
+        run: python scripts/e2e.py
       - name: Cleanup even after failed setup
         if: always()
         shell: pwsh

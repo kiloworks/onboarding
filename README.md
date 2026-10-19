@@ -1,6 +1,6 @@
 # Onboarding
 
-Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비하는 GPUIX 데스크톱 앱입니다. 공개 설치 파일에는 등록 키가 없습니다. 관리자가 Keyport 등으로 별도 발급한 **24시간 일회용·사전 승인 auth key**를 첫 실행에 입력합니다.
+Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비하는 Rust GPUI 데스크톱 앱입니다. 공개 설치 파일에는 등록 키가 없습니다. 관리자가 Keyport 등으로 별도 발급한 **24시간 일회용·사전 승인 auth key**를 첫 실행에 입력합니다.
 
 ## 설치와 사용
 
@@ -25,11 +25,11 @@ Windows PC를 Tailscale 네트워크에 연결하고 SSH 원격 지원을 준비
 
 ## 지원과 검증 범위
 
-목표 클라이언트는 Windows 10/11 **x64 및 ARM64**입니다. GPUIX·Bun·Windows 기능의 실제 제약이 적용되며 모든 과거 Windows 10 빌드의 검증을 의미하지 않습니다. 일반 로컬 Windows 계정을 대상으로 합니다. macOS와 Linux는 [후속 티켓](docs/tickets/)입니다.
+목표 클라이언트는 Windows 10/11 **x64 및 ARM64**입니다. GPUI·Windows 기능의 실제 제약이 적용되며 모든 과거 Windows 10 빌드의 검증을 의미하지 않습니다. 일반 로컬 Windows 계정을 대상으로 합니다. macOS와 Linux는 [후속 티켓](docs/tickets/)입니다.
 
 GHA 매트릭스: `windows-2022`, `windows-2025`, `windows-11-arm`.
 
-- 일반 CI: 타입 검사·핵심 로직·PowerShell 검사·GPUIX native UI 테스트·CPU별 빌드·설치 프로그램 설치/실행/제거.
+- 일반 CI: Rust 검사·핵심 로직·PowerShell 검사·Windows 접근성 API를 통한 실제 UI 테스트·CPU별 빌드·설치 프로그램 설치/실행/제거.
 - 별도 OIDC E2E: GitHub OIDC를 Tailscale WIF로 교환하여 일회용 tag:gha-smoke-test-node ephemeral 키를 발급하고 실제 앱에 입력, 실제 연결·SSH 준비·임시 테스트 키의 동일 기기 Tailscale 주소 SSH 인증을 확인한 뒤 로그아웃·미사용 키 정리.
 - 서버 러너 합격은 Windows 10/11 x64 클라이언트 실기 검증을 대체하지 않습니다. UAC의 표준 사용자 경로, 재부팅 후 동작, 실제 ECDSA-SK 하드웨어 서명은 별도 검증이 필요합니다.
 - 실제 연결 E2E는 WIF 설정 후 수동 실행합니다. 실행 기록이 없는 항목은 검증 완료로 간주하지 마세요.
@@ -42,35 +42,20 @@ GHA 매트릭스: `windows-2022`, `windows-2025`, `windows-11-arm`.
 
 ## 개발
 
-```sh
-bun install --frozen-lockfile
-bun run typecheck
-bun test tests/core.test.ts
-bun run test:ui
-bun run dev
-```
-
-GPUIX native UI 테스트는 macOS와 Windows에서 가능합니다. Windows 설치 동작은 Windows에서만 실행합니다. `@gpuix/react`와 `@gpuix/native`는 0.10.0으로 함께 고정합니다.
-
-Windows x64·ARM64 렌더러는 `.github/workflows/native-arm.yml`에서 고정한 upstream commit과 submodule로 직접 빌드합니다. npm 0.10.0에 없는 폰트 등록 API를 사용해 Pretendard Regular·SemiBold 1.3.9를 앱 내부에 포함합니다. 외부 폰트 다운로드나 시스템 폰트 설치는 없습니다. Bun 런타임과 MSVC app-local DLL도 포함되어 최종 사용자에게 Node/Bun/Rust 설치를 요구하지 않습니다.
-
-Windows에서 로컬 개발·UI 테스트·빌드하기 전, 성공한 Windows CI 실행 ID로 대응하는 렌더러를 받습니다. 아래 `RUN_ID`를 해당 ID로 바꾸고 ARM64라면 artifact 이름을 `gpuix-win32-arm64`로 바꾸세요. macOS에서 UI 레이아웃만 확인할 때는 npm 렌더러의 시스템 폰트로 표시되며 Windows Pretendard 검증을 대체하지 않습니다.
+Rust 1.98.1, Windows SDK와 Visual Studio C++ Build Tools가 필요합니다.
 
 ```sh
-gh run download RUN_ID --repo kiloworks/onboarding --name gpuix-win32-x64 --dir node_modules/@gpuix/native
+cargo test --locked
+cargo run --locked
+cargo build --locked --release
 ```
 
-화면은 웹뷰가 아닌 GPUI 네이티브 렌더링입니다. 밝은 단계별 마법사, 짧은 화면 전환과 진행 표시, 모션 줄이기를 제공합니다. UnoCSS가 생성하는 브라우저 CSS는 직접 적용되지 않아 GPUIX의 스타일 객체를 사용합니다. [패키지 용량 분석](docs/footprint.md)도 참고하세요.
+GPUI와 플랫폼 구현은 Zed commit `2565b8a3e33537c3d3f56d0d45f11e50a17e512d`로 고정합니다. React·TypeScript·Bun·JavaScriptCore와 GPUIX 바인딩은 사용하거나 배포하지 않습니다. Pretendard Regular·SemiBold를 실행파일에 포함하며 앱 사용자에게 Rust 설치를 요구하지 않습니다.
 
-```sh
-bun run build
-bun scripts/licenses.ts
-# GHA가 native dependency notices를 dist/licenses/native에 추가합니다.
-# NSIS로 packaging/onboarding.nsi를 패키징합니다.
-```
+Windows 패키징은 `.github/workflows/ci.yml`을 따릅니다. 빌드한 실행파일을 `dist/onboarding.exe`에 복사하고 `python scripts/licenses.py`, `scripts/copy-crt.ps1` 후 NSIS로 패키징합니다. 밝은 단계별 위저드, 진행 표시, 모션 줄이기, 키보드 조작을 제공합니다. [용량 분석](docs/footprint.md)을 참고하세요.
 
 공개 PR은 실제 Tailscale 자격 증명을 사용하지 않습니다. 실제 E2E 설정은 [WIF 문서](docs/wif-setup.md)를 참고하세요.
 
 ## 라이선스
 
-앱 소스는 MIT입니다. GPUIX와 포함 런타임은 각 라이선스를 따릅니다. 설치 파일의 `licenses` 디렉토리와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 확인하세요. 내용이 완전히 동일한 라이선스는 원문 한 벌과 `LICENSE-INDEX.json`의 구성요소별 참조로 보존합니다. Pretendard 원본은 SIL OFL 1.1로 배포합니다. 기존 비공개 tailscale-onboarding의 목적과 흐름을 참고했으며 그 소스와 자격 증명을 복사하지 않았습니다.
+앱 소스는 MIT입니다. GPUI와 포함 라이브러리는 각 라이선스를 따릅니다. 설치 파일의 `licenses` 디렉토리와 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 확인하세요. 내용이 완전히 동일한 라이선스는 원문 한 벌과 `LICENSE-INDEX.json`의 구성요소별 참조로 보존합니다. Pretendard 원본은 SIL OFL 1.1로 배포합니다. 기존 비공개 tailscale-onboarding의 목적과 흐름을 참고했으며 그 소스와 자격 증명을 복사하지 않았습니다.
