@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 foreach ($file in @('src/update.ps1','scripts/sign-updates.ps1')) {
     $tokens = $null; $errors = $null
-    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root $file), [ref]$tokens, [ref]$errors)
+    $ast = [Management.Automation.Language.Parser]::ParseInput([IO.File]::ReadAllText((Join-Path $root $file), [Text.Encoding]::UTF8), [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw ($errors | Out-String) }
     if ($file -eq 'src/update.ps1') {
         $fn = $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Verify-Update' }, $false)[0]
