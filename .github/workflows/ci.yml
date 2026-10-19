@@ -1,0 +1,116 @@
+name: Windows CI
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arm-binding:
+    uses: ./.github/workflows/native-arm.yml
+  windows:
+    needs: arm-binding
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-2025
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        if: matrix.arch == 'arm64'
+        with:
+          name: gpuix-win32-arm64
+          path: node_modules/@gpuix/native
+      - run: bun run typecheck
+      - run: bun test tests/core.test.ts
+      - run: ./scripts/check-windows.ps1
+      - run: New-Item -ItemType Directory -Force artifacts | Out-Null
+      - run: bun run test:ui
+      - run: bun run build
+      - run: bun scripts/licenses.ts
+      - name: Include native dependency licenses
+        uses: actions/download-artifact@v4
+        with:
+          name: gpuix-native-licenses
+          path: dist/licenses/native
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (!(Test-Path $nsis)) { choco install nsis --yes --no-progress; if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' } }
+          & $nsis /DARCH=${{ matrix.arch }} packaging/onboarding.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
+      - name: Install and launch packaged application
+        shell: pwsh
+        run: |
+          $installer = Get-Item dist/*-setup.exe
+          $install = Join-Path $env:RUNNER_TEMP 'Onboarding-installed'
+          $p = Start-Process $installer.FullName -ArgumentList @('/S', "/D=$install") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Installer failed' }
+          if (!(Test-Path "$install\onboarding.exe") -or !(Test-Path "$install\gpuix-native.node")) { throw 'Missing installed app' }
+          $env:GPUIX_BACKGROUND = '1'
+          $p = Start-Process "$install\onboarding.exe" -ArgumentList '--smoke-gui' -PassThru
+          if (!$p.WaitForExit(30000)) { $p.Kill(); throw 'Packaged GUI did not finish smoke launch' }
+          if ($p.ExitCode -ne 0) { throw 'Packaged GUI exited with an error' }
+          Start-Process "$install\Uninstall.exe" -ArgumentList '/S' -Wait
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*-setup.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)" | Set-Content ($_.FullName + '.sha256') -Encoding ascii
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-${{ matrix.runner }}
+          path: |
+            dist/*-setup.exe
+            dist/*.sha256
+            artifacts/ui-complete.png
+          if-no-files-found: error
+          retention-days: 7
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: onboarding-*
+          path: artifacts
+      - name: Publish unsigned preview installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir release
+          cp artifacts/onboarding-windows-2025/*-setup.exe* release/
+          cp artifacts/onboarding-windows-11-arm/*-setup.exe* release/
+          cat > notes.txt <<'NOTES'
+          Windows x64·ARM64용 미서명 테스트 릴리스입니다.
+          관리자가 전달한 Tailscale 일회용 키를 첫 실행에 입력합니다.
+          Tailscale 업데이트와 SSH 준비를 수행하며 모든 네트워크의 TCP 22번을 허용합니다.
+          기본 관리자 공개키 두 개가 등록됩니다.
+          Windows Server 2022/2025와 Windows 11 ARM64 CI 결과는 해당 실행을 확인하세요.
+          실제 Windows 10/11 x64, UAC 및 보안키 하드웨어 접속 검증은 별도 필요합니다.
+          OIDC 실제 연결 E2E는 WIF 설정 후 별도 실행해야 합니다. CI 합격을 실제 연결 E2E 합격으로 해석하지 마세요.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --title "Onboarding $GITHUB_REF_NAME — Windows preview" --notes-file notes.txt release/*

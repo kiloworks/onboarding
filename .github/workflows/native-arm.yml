@@ -42,6 +42,26 @@ jobs:
         working-directory: packages/native
         env:
           CARGO_BUILD_TARGET: aarch64-pc-windows-msvc
+      - name: Collect native dependency notices
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force native-licenses | Out-Null
+          $roots = @((Join-Path $env:USERPROFILE '.cargo/registry/src'), 'zed/crates', 'packages/native')
+          foreach ($root in $roots) {
+            if (!(Test-Path $root)) { continue }
+            Get-ChildItem $root -Recurse -File -Include 'LICENSE*','COPYING*','NOTICE*' | ForEach-Object {
+              $parent = Split-Path $_.DirectoryName -Leaf
+              $dest = Join-Path 'native-licenses' ($parent + '-' + $_.Name)
+              Copy-Item $_.FullName $dest -Force
+            }
+          }
+          if (!(Get-ChildItem native-licenses)) { throw 'No native notices collected' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gpuix-native-licenses
+          path: native-licenses
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: gpuix-win32-arm64
