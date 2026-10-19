@@ -228,6 +228,13 @@ pub fn onboard(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn inspect_windows_account() {
+        let machine =
+            inspect().expect("Windows account inspection must succeed before the wizard can start");
+        assert!(machine.sid.starts_with("S-1-5-21-") && !machine.user.is_empty());
+    }
     #[test]
     fn protocol_boundaries() {
         assert!(line(&mut BufReader::new(&b"nonce\r\n"[..])).is_ok());
