@@ -9,20 +9,29 @@ jobs:
     runs-on: windows-11-arm
     timeout-minutes: 90
     steps:
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: bundle
+        with:
+          path: ${{ runner.temp }}/gpuix-native-bundle
+          key: gpuix-bundle-515df198-arm64-v1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.bundle.outputs.cache-hit != 'true'
         with:
           repository: remorses/gpuix
           ref: 515df198fef2685f5ed7dd120bf0db638eb5c360
           submodules: recursive
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: steps.bundle.outputs.cache-hit != 'true'
         with:
           bun-version: 1.4.3
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        if: steps.bundle.outputs.cache-hit != 'true'
         with:
           target: aarch64-pc-windows-msvc
           cache: false
           rustflags: ''
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: steps.bundle.outputs.cache-hit != 'true'
         with:
           path: |
             ~/.cargo/registry
@@ -30,6 +39,7 @@ jobs:
             packages/native/target
           key: gpuix-515df198-arm64-v1
       - name: Configure ARM64 Clang
+        if: steps.bundle.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -38,13 +48,16 @@ jobs:
           if (!(Test-Path "$llvm\clang.exe")) { throw 'ARM64 Clang is missing' }
           $llvm | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install native build dependencies only
+        if: steps.bundle.outputs.cache-hit != 'true'
         run: npm install --ignore-scripts --workspaces=false --package-lock=false
         working-directory: packages/native
       - run: bun run build
+        if: steps.bundle.outputs.cache-hit != 'true'
         working-directory: packages/native
         env:
           CARGO_BUILD_TARGET: aarch64-pc-windows-msvc
       - name: Collect native dependency notices
+        if: steps.bundle.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force native-licenses | Out-Null
@@ -58,15 +71,23 @@ jobs:
             }
           }
           if (!(Get-ChildItem native-licenses)) { throw 'No native notices collected' }
+      - name: Cache the renderer and notices
+        if: steps.bundle.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'gpuix-native-bundle'
+          New-Item -ItemType Directory -Force "$bundle/licenses" | Out-Null
+          Copy-Item packages/native/gpuix-native.win32-arm64-msvc.node $bundle
+          Copy-Item native-licenses/* "$bundle/licenses/"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpuix-native-licenses
-          path: native-licenses
+          path: ${{ runner.temp }}/gpuix-native-bundle/licenses
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gpuix-win32-arm64
-          path: packages/native/gpuix-native.win32-arm64-msvc.node
+          path: ${{ runner.temp }}/gpuix-native-bundle/gpuix-native.win32-arm64-msvc.node
           if-no-files-found: error
           retention-days: 14

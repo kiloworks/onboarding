@@ -7,7 +7,7 @@ GPUIX includes GPUI from the Zed project and other Rust dependencies.
 
 React is MIT licensed, Copyright Meta Platforms, Inc. and affiliates.
 Bun is MIT licensed and embeds JavaScriptCore, whose notices and applicable
-licenses are distributed in THIRD_PARTY_LICENSES.txt by Bun:
+licenses are described in the upstream LICENSE.md, included as Bun-1.4.3.md:
 https://github.com/oven-sh/bun/blob/main/LICENSE.md.
 
 The release package includes a licenses directory with upstream runtime and
