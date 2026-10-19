@@ -87,19 +87,22 @@ function Reset-Tailscale {
   if ($script:key.Length -gt 512 -or $script:key -notmatch '^tskey-auth-[A-Za-z0-9_-]{10,}$') { throw 'a new auth key is required' }
   Send '기존 Tailscale 연결과 저장된 모든 계정·설정을 삭제합니다.'
   Stop-Service Tailscale -Force
-  foreach ($process in (Get-Process tailscale-ipn -ErrorAction SilentlyContinue)) {
-    if ($null -ne $process) { $process | Stop-Process -Force }
-  }
-  $paths = @(
-    (Join-Path $env:ProgramData 'Tailscale'),
-    (Join-Path $env:SystemRoot 'System32\config\systemprofile\AppData\Local\Tailscale')
-  )
-  foreach ($profile in (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\*')) {
-    if ($profile.ProfileImagePath) {
-      $paths += Join-Path ([Environment]::ExpandEnvironmentVariables($profile.ProfileImagePath)) 'AppData\Local\Tailscale'
-    }
-  }
   try {
+    foreach ($process in (Get-Process tailscale-ipn -ErrorAction SilentlyContinue)) {
+      if ($null -ne $process) { $process | Stop-Process -Force; $process | Wait-Process -Timeout 30 }
+    }
+    foreach ($process in (Get-Process tailscaled -ErrorAction SilentlyContinue)) {
+      if ($null -ne $process) { $process | Wait-Process -Timeout 30 }
+    }
+    $paths = @(
+      (Join-Path $env:ProgramData 'Tailscale'),
+      (Join-Path $env:SystemRoot 'System32\config\systemprofile\AppData\Local\Tailscale')
+    )
+    foreach ($profile in (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\*')) {
+      if ($profile.ProfileImagePath) {
+        $paths += Join-Path ([Environment]::ExpandEnvironmentVariables($profile.ProfileImagePath)) 'AppData\Local\Tailscale'
+      }
+    }
     foreach ($path in ($paths | Select-Object -Unique)) {
       if (Test-Path -LiteralPath $path) {
         # Refuse links before elevated recursive deletion.

@@ -36,16 +36,39 @@ try { Connect-Tailscale; throw 'Existing connection bypassed registration' }
 catch { if ($_.Exception.Message -ne 'a new auth key is required') { throw } }
 # Exercise reset without touching the runner's actual services or state.
 $script:calls = @()
+$script:processesPresent = $true
 function Stop-Service { param($Name, [switch]$Force) $script:calls += 'stop' }
 function Start-Service { param($Name) $script:calls += 'start' }
-function Get-Process { param($Name, $ErrorAction) return $null }
+function Get-Process { param($Name, $ErrorAction) if ($script:processesPresent) { return @{ ProcessName = $Name } } }
+function Stop-Process { param([Parameter(ValueFromPipeline)]$InputObject, [switch]$Force) process { $script:calls += 'stop-ui' } }
+function Wait-Process {
+  param([Parameter(ValueFromPipeline)]$InputObject, $Timeout)
+  process {
+    if ($Timeout -ne 30) { throw 'Process exit wait must be bounded' }
+    $script:calls += "wait-$($InputObject.ProcessName)"
+    if ($script:failWait -and $InputObject.ProcessName -eq 'tailscaled') { throw 'test-process-timeout' }
+  }
+}
 function Get-ItemProperty { param($Path) return @{ ProfileImagePath = 'C:\Users\fixture' } }
 function Test-Path { param($LiteralPath) return $true }
 function Get-Item { param($LiteralPath, [switch]$Force) return @{ Attributes = 0 } }
 function Get-ChildItem { param($LiteralPath, [switch]$Recurse, [switch]$Force) return @() }
-function Remove-Item { param($LiteralPath, [switch]$Recurse, [switch]$Force) $script:calls += 'delete' }
+function Remove-Item {
+  param($LiteralPath, [switch]$Recurse, [switch]$Force)
+  if ($script:processesPresent -and ($script:calls -notcontains 'wait-tailscaled' -or $script:calls -notcontains 'wait-tailscale-ipn')) { throw 'Tailscale log is still locked until its processes exit' }
+  $script:calls += 'delete'
+}
 $script:key = 'tskey-auth-test-only-key'
 Reset-Tailscale
-if (($script:calls -join ',') -ne 'stop,delete,delete,delete,start') { throw 'Reset must stop, delete all state paths, then start' }
+if (($script:calls -join ',') -ne 'stop,stop-ui,wait-tailscale-ipn,wait-tailscaled,delete,delete,delete,start') { throw 'Reset must stop, delete all state paths, then start' }
 if ($script:registered) { throw 'Reset retained registration success' }
-Write-Host 'Fresh registration and destructive reset ordering: PASS'
+$script:calls = @()
+$script:failWait = $true
+try { Reset-Tailscale; throw 'Reset ignored a process timeout' }
+catch { if ($_.Exception.Message -ne 'test-process-timeout') { throw } }
+if ($script:calls -contains 'delete' -or $script:calls[-1] -ne 'start') { throw 'Reset must preserve state and restart the service when process exit fails' }
+$script:calls = @()
+$script:processesPresent = $false
+Reset-Tailscale
+if (($script:calls -join ',') -ne 'stop,delete,delete,delete,start') { throw 'Reset must also work when Tailscale processes have already exited' }
+Write-Host 'Fresh registration, process exit before deletion and service recovery: PASS'
