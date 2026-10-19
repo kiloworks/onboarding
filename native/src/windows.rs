@@ -196,6 +196,11 @@ pub fn onboard(
             start.elapsed() < Duration::from_secs(45 * 60),
             "설치 시간이 초과되었습니다. 리포트를 관리자에게 전달해 주세요."
         );
+        stream.get_mut().set_read_timeout(Some(
+            Duration::from_secs(45 * 60)
+                .saturating_sub(start.elapsed())
+                .max(Duration::from_millis(1)),
+        ))?;
         let raw = line(&mut stream)?;
         let Ok(mut event) = serde_json::from_str::<Event>(&raw) else {
             continue;

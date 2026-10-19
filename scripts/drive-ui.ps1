@@ -1,6 +1,6 @@
 param([switch]$E2E)
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -35,10 +35,25 @@ function Click([string]$Id) {
   $pattern.Invoke()
   Start-Sleep -Milliseconds 200
 }
+function Capture([string]$Name) {
+  if ($E2E) { return }
+  [void][NativeInput]::SetForegroundWindow($p.MainWindowHandle)
+  Start-Sleep -Milliseconds 300
+  $root = [Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+  $rect = $root.Current.BoundingRectangle
+  $bitmap = [Drawing.Bitmap]::new([int]$rect.Width, [int]$rect.Height)
+  $graphics = [Drawing.Graphics]::FromImage($bitmap)
+  try {
+    $graphics.CopyFromScreen([int]$rect.Left, [int]$rect.Top, 0, 0, $bitmap.Size)
+    New-Item -ItemType Directory -Force artifacts | Out-Null
+    $bitmap.Save((Join-Path $PWD "artifacts/ui-$Name.png"), [Drawing.Imaging.ImageFormat]::Png)
+  } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
 $key = if ($E2E) { [Console]::In.ReadLine() } else { 'tskey-auth-test-only-not-a-real-key' }
 $p = Start-Process $env:ONBOARDING_EXE -PassThru
 try {
   [void](Find 'begin' 60)
+  Capture 'welcome'
   Click 'begin'
   if (!$E2E) {
     Click 'next'
@@ -52,6 +67,7 @@ try {
   Click 'next'
   [void](Find 'start')
   if ((Find 'heading').Current.Name -notmatch '시작 전에') { throw 'Missing explicit final review' }
+  Capture 'review'
   if (!$E2E) { Write-Host 'Native UI input, validation and final consent: PASS'; return }
   Click 'start'
   $deadline = [DateTime]::UtcNow.AddMinutes(30)

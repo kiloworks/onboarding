@@ -50,16 +50,22 @@ def main():
         subprocess.run(['pwsh', '-NoProfile', '-File', 'scripts/check-ssh.ps1'], check=True, timeout=120)
         print('Packaged Rust GPUI → WIF one-off key → Tailscale + SSH: PASS')
     finally:
+        errors = []
         if os.path.isfile(ts):
-            result = subprocess.run([ts, 'logout'], timeout=30, capture_output=True)
-            if result.returncode:
-                raise RuntimeError('Tailscale logout failed; check ephemeral node cleanup')
+            try:
+                result = subprocess.run([ts, 'logout'], timeout=30, capture_output=True)
+                if result.returncode:
+                    errors.append('Tailscale logout failed; check ephemeral node cleanup')
+            except subprocess.TimeoutExpired:
+                errors.append('Tailscale logout timed out; check ephemeral node cleanup')
         if access and key_id:
             try:
                 request('https://api.tailscale.com/api/v2/tailnet/-/keys/' + urllib.parse.quote(key_id, safe=''), token=access, method='DELETE')
             except RuntimeError as error:
                 if 'HTTP 404' not in str(error):
-                    raise
+                    errors.append('Unused key revocation failed')
+        if errors:
+            raise RuntimeError('; '.join(errors))
 
 
 if __name__ == '__main__':
