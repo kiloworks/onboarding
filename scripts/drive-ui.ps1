@@ -11,6 +11,16 @@ public class NativeInput {
  [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int x,y; public uint data,flags,time; public UIntPtr extra; }
  [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] input, int size);
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+ [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+ public static void Activate(IntPtr hwnd, int x, int y) {
+   SetForegroundWindow(hwnd);
+   if (GetForegroundWindow() != hwnd) {
+     SetCursorPos(x,y);
+     var a = new INPUT[2]; a[0].u.mi.flags=2; a[1].u.mi.flags=4;
+     if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Window activation failed");
+   }
+ }
  public static void Text(string s) { foreach(char c in s) { var a = new INPUT[2]; a[0].type=a[1].type=1; a[0].u.ki.scan=a[1].u.ki.scan=c; a[0].u.ki.flags=4; a[1].u.ki.flags=6; if(SendInput(2,a,Marshal.SizeOf(typeof(INPUT)))!=2) throw new Exception("Text input failed"); } }
 }
 '@
@@ -52,6 +62,11 @@ function Capture([string]$Name) {
 $key = if ($E2E) { [Console]::In.ReadLine() } else { 'tskey-auth-test-only-not-a-real-key' }
 $p = Start-Process $env:ONBOARDING_EXE -PassThru
 try {
+  $windowDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  do { $p.Refresh(); if ($p.HasExited) { throw 'App exited before opening its window' }; if ($p.MainWindowHandle -ne 0) { break }; Start-Sleep -Milliseconds 100 } while ([DateTime]::UtcNow -lt $windowDeadline)
+  if ($p.MainWindowHandle -eq 0) { throw 'App did not open a native window' }
+  $bounds = ([Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)).Current.BoundingRectangle
+  [NativeInput]::Activate($p.MainWindowHandle, [int]($bounds.Left + 100), [int]($bounds.Top + 15))
   [void](Find 'begin' 60)
   Capture 'welcome'
   Click 'begin'
