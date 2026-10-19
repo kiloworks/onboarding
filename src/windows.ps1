@@ -184,6 +184,7 @@ function Install-SSH {
   if (!$isAdmin) { $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($userSid, 'FullControl', 'Allow'))); $acl.SetOwner($userSid) }
   else { $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544'))) }
   Set-Acl $authFile $acl
+  Start-Service sshd
   $sshd = SSH-ServerPath
   $keygen = Join-Path (Split-Path $sshd) 'ssh-keygen.exe'
   [void](Run-Process $keygen @('-A'))
